@@ -38,6 +38,16 @@ Für den Dauerbetrieb auf einem eigenen Server (Docker + Cloudflare Tunnel,
 Zugang für einen kleinen Kreis, Installation auf dem iPhone) gibt es eine
 eigene Anleitung: **[docs/hosting.md](docs/hosting.md)**.
 
+Nur die Oberfläche ansehen, ohne irgendetwas einzurichten:
+
+```bash
+npm install && npm run build:demo
+```
+
+Das erzeugt `dist/demo/autohouse-demo.html` – eine einzelne Datei mit
+Beispieldaten, die sich überall öffnen lässt, auch auf dem Telefon. Sie stellt
+keine Netzwerkanfragen und bestellt nichts.
+
 ```bash
 npm install
 
@@ -342,6 +352,15 @@ Die Oberfläche ist für das Telefon ausgelegt und als Web-App installierbar:
 in Safari aufrufen, *Teilen → Zum Home-Bildschirm*. Danach startet AutoHouse
 im Vollbild mit eigenem Symbol – kein App Store, kein Entwicklerkonto.
 Details in [docs/hosting.md](docs/hosting.md#9-auf-dem-iphone-installieren).
+
+### Einrichtung und Auslieferung
+
+`deploy/setup.sh` richtet einen frischen Ubuntu-Server in einem Rutsch ein
+(Docker, Benutzer, Firewall, Auslagerungsdatei, `.env` mit erzeugtem
+Schlüssel, Container). `.github/workflows/deploy.yml` prüft jeden Push, baut
+das Image nach ghcr.io und aktualisiert auf Wunsch den Server per SSH –
+Einzelheiten in
+[docs/hosting.md](docs/hosting.md#12-den-build-automatisieren).
 
 ## Grenzen und Verantwortung
 

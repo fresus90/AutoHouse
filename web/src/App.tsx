@@ -9,7 +9,7 @@ import { PlanEditorPage } from './pages/PlanEditorPage';
 import { RunsPage } from './pages/RunsPage';
 import { RunDetailPage } from './pages/RunDetailPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { Spinner } from './components/ui';
+import { DemoBanner, Spinner } from './components/ui';
 
 export function App() {
   return (
@@ -35,6 +35,7 @@ function Shell() {
     <div className="app">
       <Sidebar />
       <main className="content">
+        <DemoBanner />
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/shops" element={<ShopsPage />} />

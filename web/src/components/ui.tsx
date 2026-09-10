@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ApiError } from '../lib/api';
+import { ApiError, isDemoMode } from '../lib/api';
 import { RUN_STATUS_LABEL } from '../lib/format';
 
 export function Notice({
@@ -53,4 +53,16 @@ export function Spinner({ label = 'Wird geladen …' }: { label?: string }) {
 
 export function Empty({ children }: { children: ReactNode }) {
   return <div className="empty">{children}</div>;
+}
+
+/** Nur im Demo-Build sichtbar – macht deutlich, dass nichts echt ist. */
+export function DemoBanner() {
+  if (!isDemoMode) return null;
+  return (
+    <Notice kind="info">
+      <strong>Demo-Modus.</strong> Alle Daten liegen nur in diesem Browser, es
+      werden keine Anfragen an dm oder REWE gestellt und nichts bestellt.
+      Anmelden geht mit beliebiger E-Mail und beliebigem Passwort.
+    </Notice>
+  );
 }

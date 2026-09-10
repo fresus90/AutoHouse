@@ -74,6 +74,14 @@ h3 { font-size: 1rem; }
   min-height: 100vh;
 }
 
+/* Ohne min-width:0 wachsen Grid-Kinder mit ihrem Inhalt ueber die Spalte
+   hinaus – auf dem Telefon schiebt das sonst die ganze Seite zur Seite. */
+.sidebar,
+.content,
+.nav {
+  min-width: 0;
+}
+
 .sidebar {
   background: var(--surface);
   border-right: 1px solid var(--border);

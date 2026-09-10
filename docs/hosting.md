@@ -23,6 +23,7 @@ Zeitaufwand beim ersten Mal: etwa eine Stunde.
 
 ## Inhalt
 
+- [Vorab: die Oberfläche ohne Server ansehen](#vorab-die-oberfläche-ohne-server-ansehen)
 1. [Was der Server können muss](#1-was-der-server-können-muss)
 2. [Server vorbereiten](#2-server-vorbereiten)
 3. [AutoHouse einrichten](#3-autohouse-einrichten)
@@ -34,9 +35,58 @@ Zeitaufwand beim ersten Mal: etwa eine Stunde.
 9. [Auf dem iPhone installieren](#9-auf-dem-iphone-installieren)
 10. [Betrieb: Updates, Sicherungen, Logs](#10-betrieb-updates-sicherungen-logs)
 11. [Fehlersuche](#11-fehlersuche)
-12. [Kosten](#12-kosten)
+12. [Den Build automatisieren](#12-den-build-automatisieren)
+13. [Kosten](#13-kosten)
 
 ---
+
+## Vorab: die Oberfläche ohne Server ansehen
+
+Bevor irgendein Server läuft, lässt sich das Frontend schon bedienen. Es gibt
+dafür einen Demo-Build: dieselbe Oberfläche, aber mit Beispieldaten im
+Browser statt einer echten Verbindung. Es werden keine Anfragen an dm oder
+REWE gestellt und nichts bestellt.
+
+```bash
+npm install
+npm run build:demo        # -> dist/demo/autohouse-demo.html
+```
+
+Heraus kommt **eine einzige HTML-Datei** ohne Abhängigkeiten. Drei Wege, sie
+aufs Telefon zu bekommen:
+
+| Weg | Vorgehen | Wofür |
+| --- | --- | --- |
+| Datei teilen | Per AirDrop, Mail oder in iCloud Drive legen, auf dem iPhone in Safari öffnen | Layout, Bedienbarkeit, Daumenwege |
+| Zum Home-Bildschirm | Datei öffnen, *Teilen → Zum Home-Bildschirm* | Wie es sich als App anfühlt |
+| Im Freundeskreis zeigen | Datei verschicken, jeder kann gefahrlos herumklicken | Rückmeldungen einsammeln |
+
+Die Demo enthält Beispiel-Shops, drei Bestellpläne und ein paar Läufe. *Jetzt
+ausführen* startet einen simulierten Lauf, dessen Protokoll über einige
+Sekunden mitläuft – so sieht man die Live-Ansicht in Bewegung.
+
+**Die echte App im heimischen WLAN testen** – für alles, was einen Server
+braucht (Anmeldung, Produktsuche, Bestellpläne speichern):
+
+```bash
+npm run dev -- --host          # bindet den Vite-Server an alle Adressen
+```
+
+Dann auf dem Telefon `http://<ip-des-laptops>:5173` aufrufen; beide Geräte
+müssen im selben WLAN sein. Die IP liefert `ipconfig getifaddr en0` (macOS)
+oder `hostname -I` (Linux).
+
+Soll auch jemand von außerhalb kurz draufschauen, geht das ohne feste
+Einrichtung mit einem Wegwerf-Tunnel:
+
+```bash
+npm run build && npm start                          # Terminal 1
+cloudflared tunnel --url http://localhost:4000      # Terminal 2
+```
+
+`cloudflared` gibt eine zufällige `https://…trycloudflare.com`-Adresse aus,
+die gilt, solange der Befehl läuft. Für den Dauerbetrieb ist der eingerichtete
+Tunnel aus Schritt 4 gedacht.
 
 ## 1. Was der Server können muss
 
@@ -67,6 +117,21 @@ Die folgenden Befehle gehen von **Ubuntu 24.04** aus.
 ---
 
 ## 2. Server vorbereiten
+
+> **Schnellweg.** Die Schritte 2 und 3 erledigt auch ein Skript. Auf dem
+> frischen Server als root:
+>
+> ```bash
+> apt update && apt install -y git
+> git clone https://github.com/fresus90/AutoHouse.git /opt/autohouse-setup
+> TUNNEL_TOKEN="ey…" bash /opt/autohouse-setup/deploy/setup.sh
+> ```
+>
+> Das legt Docker, den Benutzer, die Firewall, bei wenig RAM eine
+> Auslagerungsdatei, die `.env` mit frisch erzeugtem `ENCRYPTION_KEY` und die
+> Container an. Den Token holst du dir vorher aus Schritt 4 – oder lässt ihn
+> weg und trägst ihn später nach. Wer lieber weiß, was passiert, geht die
+> Schritte unten von Hand durch; das Skript tut genau dasselbe.
 
 Nach dem Anlegen des Servers per SSH verbinden (`ssh root@<server-ip>`).
 
@@ -467,7 +532,68 @@ curl -s localhost:4000/api/health    # nur wenn du den Port lokal freigegeben ha
 
 ---
 
-## 12. Kosten
+## 12. Den Build automatisieren
+
+Das Image auf einem 2-GB-Server zu bauen dauert und belegt Speicher. Besser:
+GitHub baut es, der Server lädt es nur herunter. Dafür liegt
+`.github/workflows/deploy.yml` bereit. Der Ablauf:
+
+```
+git push  ──►  Tests + Typprüfung  ──►  Image nach ghcr.io  ──►  Server aktualisiert sich
+```
+
+**a) Ohne weitere Einrichtung** laufen bei jedem Push Tests, Typprüfung und
+Build. Das allein lohnt sich schon: Ein Fehler fällt auf, bevor er auf dem
+Server landet.
+
+**b) Image bauen lassen.** Sobald der Workflow einmal auf `main` gelaufen ist,
+liegt das Image unter `ghcr.io/<dein-benutzer>/autohouse:latest`. Damit der
+Server es ohne Anmeldung ziehen kann, das Paket einmalig öffentlich stellen:
+GitHub → dein Profil → *Packages* → `autohouse` → *Package settings* →
+*Change visibility* → *Public*. (Alternativ meldet sich der Server mit
+`docker login ghcr.io` an.)
+
+Auf dem Server dann in der `.env` eintragen:
+
+```ini
+AUTOHOUSE_IMAGE=ghcr.io/<dein-benutzer>/autohouse:latest
+```
+
+Ab jetzt genügt zum Aktualisieren:
+
+```bash
+cd ~/AutoHouse && git pull && docker compose pull app && docker compose up -d
+```
+
+**c) Ganz ohne Handgriff.** Hinterlege drei Geheimnisse im Repository unter
+*Settings → Secrets and variables → Actions*:
+
+| Name | Wert |
+| --- | --- |
+| `DEPLOY_HOST` | IP oder Hostname des Servers |
+| `DEPLOY_USER` | `autohouse` |
+| `DEPLOY_SSH_KEY` | privater SSH-Schlüssel ohne Passphrase |
+
+Den Schlüssel erzeugst du auf deinem Rechner und hinterlegst den öffentlichen
+Teil auf dem Server:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/autohouse-deploy -N "" -C "github-actions"
+ssh-copy-id -i ~/.ssh/autohouse-deploy.pub autohouse@<server-ip>
+cat ~/.ssh/autohouse-deploy        # Inhalt als DEPLOY_SSH_KEY einfügen
+```
+
+Danach aktualisiert sich der Server bei jedem Push auf `main` selbst. Fehlen
+die Geheimnisse, überspringt der Workflow den Schritt und meldet nur, welches
+Image bereitsteht – kein roter Lauf.
+
+> Ein Deploy-Schlüssel ohne Passphrase ist ein vollwertiger Zugang zum Server.
+> Nutze einen eigenen Schlüssel nur für diesen Zweck und nicht denselben, mit
+> dem du dich selbst anmeldest.
+
+---
+
+## 13. Kosten
 
 | Posten | Preis |
 | --- | --- |

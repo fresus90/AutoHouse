@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
 import { useSession } from '../lib/session';
-import { ErrorNotice, Notice } from '../components/ui';
+import { DemoBanner, ErrorNotice, Notice } from '../components/ui';
 
 export function LoginPage() {
   const { needsSetup, refresh } = useSession();
@@ -39,6 +39,7 @@ export function LoginPage() {
             : 'Bitte anmelden, um Shops und Bestellpläne zu verwalten.'}
         </p>
 
+        <DemoBanner />
         <ErrorNotice error={error} />
         {needsSetup && (
           <Notice kind="info">

@@ -11,8 +11,11 @@ name: autohouse
 
 services:
   app:
+    # Standardmaessig wird hier gebaut. Ist AUTOHOUSE_IMAGE in der .env
+    # gesetzt (z. B. auf ein in der CI gebautes ghcr.io-Image), wird dieses
+    # geladen – das spart dem kleinen Server den Bau.
     build: .
-    image: autohouse:latest
+    image: ${AUTOHOUSE_IMAGE:-autohouse:latest}
     restart: unless-stopped
     env_file: .env
     environment:
