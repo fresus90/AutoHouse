@@ -362,8 +362,53 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .progress > div { height: 100%; background: var(--accent); }
 .progress.over > div { background: var(--danger); }
 
+/* --- Telefon / installierte App ---------------------------------------- */
+/* env(safe-area-inset-*) haelt Inhalte aus Notch und Home-Indikator heraus,
+   wenn die App vom iOS-Home-Bildschirm im Vollbild startet. */
+
 @media (max-width: 860px) {
   .app { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; flex-direction: column; }
-  .content { padding: 1.25rem 1rem 3rem; }
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: auto;
+    gap: 0.6rem;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: calc(0.7rem + env(safe-area-inset-top)) max(0.9rem, env(safe-area-inset-right))
+      0.6rem max(0.9rem, env(safe-area-inset-left));
+  }
+
+  .brand small { display: none; }
+
+  .nav {
+    flex-direction: row;
+    gap: 0.25rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav a { white-space: nowrap; padding: 0.35rem 0.65rem; }
+
+  .sidebar-footer {
+    margin-top: 0;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .content {
+    padding: 1.25rem max(1rem, env(safe-area-inset-right))
+      calc(3rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  }
+
+  /* Unter 16px zoomt iOS beim Antippen eines Feldes in die Seite hinein. */
+  input, select, textarea { font-size: 16px; }
+
+  /* Bequemere Trefferflaechen fuer den Daumen. */
+  button, .button { min-height: 40px; }
+  .nav a, button.small, .button.small { min-height: 36px; }
 }

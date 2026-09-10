@@ -19,6 +19,7 @@
     "test": "tsx --test tests/*.test.ts",
     "user:create": "tsx src/cli/create-user.ts",
     "shop:login": "tsx src/cli/shop-login.ts",
+    "shop:session": "tsx src/cli/shop-session.ts",
     "plan:run": "tsx src/cli/run-plan.ts",
     "postinstall": "node scripts/check-browser.mjs"
   },

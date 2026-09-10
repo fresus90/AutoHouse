@@ -24,7 +24,7 @@ Browser (React)  ──►  Express-API  ──►  SQLite
 - [Kommandozeile](#kommandozeile)
 - [Konfiguration](#konfiguration)
 - [Tests](#tests)
-- [Betrieb](#betrieb)
+- [Betrieb und Hosting](#betrieb-und-hosting)
 - [Grenzen und Verantwortung](#grenzen-und-verantwortung)
 
 ---
@@ -33,6 +33,10 @@ Browser (React)  ──►  Express-API  ──►  SQLite
 
 Voraussetzung: **Node.js 22.13 oder neuer** (die App nutzt das eingebaute
 `node:sqlite`, deshalb gibt es keine Datenbank-Abhängigkeit).
+
+Für den Dauerbetrieb auf einem eigenen Server (Docker + Cloudflare Tunnel,
+Zugang für einen kleinen Kreis, Installation auf dem iPhone) gibt es eine
+eigene Anleitung: **[docs/hosting.md](docs/hosting.md)**.
 
 ```bash
 npm install
@@ -223,11 +227,23 @@ npm run shop:login -- --shop shop_abc123 --headless   # mit gespeicherten Zugang
 # Bestellplan sofort ausführen (zeigt das Ergebnis im Terminal)
 npm run plan:run -- --list
 npm run plan:run -- --plan plan_xyz789
+
+# Angemeldete Shop-Session zwischen zwei Installationen umziehen
+# (z. B. vom Laptop auf einen Server ohne Bildschirm)
+npm run shop:session -- --export shop_abc123 --out session.json
+npm run shop:session -- --import shop_xyz789 --file session.json
 ```
 
 Der Login-Assistent ist der empfohlene Weg für den **ersten** Login bei dm und
 REWE: Captcha und Zwei-Faktor-Abfragen erledigt man einmal von Hand, danach
-läuft alles mit der gespeicherten Session.
+läuft alles mit der gespeicherten Session. Auf einem Server ohne Bildschirm
+meldet man sich stattdessen lokal an und zieht die Session mit
+`shop:session` um – der Ablauf steht in
+[docs/hosting.md](docs/hosting.md#8-shops-verbinden--auch-ohne-bildschirm).
+
+Im gebauten Produktions-Image (ohne Entwicklungsabhängigkeiten) heißen dieselben
+Befehle `node dist/cli/<name>.js`, z. B.
+`docker compose exec app node dist/cli/create-user.js --email …`.
 
 ---
 
@@ -274,10 +290,26 @@ Der Browser-Test überspringt sich selbst, wenn kein Chromium installiert ist.
 
 ---
 
-## Betrieb
+## Betrieb und Hosting
 
-Die App ist ein einzelner Node-Prozess mit einer SQLite-Datei. Für den
-Dauerbetrieb genügt ein systemd-Dienst:
+Für den eigenen Server gibt es eine vollständige Schritt-für-Schritt-Anleitung:
+**[docs/hosting.md](docs/hosting.md)** – kleiner VPS oder Rechner zuhause,
+Docker, Cloudflare Tunnel (kein offener Port, keine feste IP nötig),
+Cloudflare Access als Türsteher für den Freundeskreis, Sicherungen und
+Fehlersuche.
+
+Kurzfassung mit Docker:
+
+```bash
+cp .env.example .env       # ENCRYPTION_KEY und TUNNEL_TOKEN eintragen
+docker compose up -d --build
+```
+
+Das Image baut auf `node:22-bookworm-slim`, installiert Chromium über
+Playwright und läuft als unprivilegierter Benutzer. Die Datenbank liegt im
+Volume `autohouse-data` und übersteht jeden Neubau.
+
+Ohne Docker genügt ein systemd-Dienst:
 
 ```ini
 [Unit]
@@ -296,14 +328,20 @@ WantedBy=multi-user.target
 ```
 
 Zu sichern sind `data/autohouse.db` **und** der `ENCRYPTION_KEY` – ohne den
-Schlüssel sind die gespeicherten Shop-Zugangsdaten wertlos. Wird die App über
-das Internet erreichbar gemacht, gehört ein HTTPS-Reverse-Proxy davor
-(`NODE_ENV=production` setzt das Session-Cookie dann auf `secure`).
+Schlüssel sind die gespeicherten Shop-Zugangsdaten wertlos. `./scripts/backup.sh`
+erledigt die Datenbanksicherung im laufenden Betrieb. Wird die App über das
+Internet erreichbar gemacht, gehört HTTPS davor (`NODE_ENV=production` setzt das
+Session-Cookie dann auf `secure`; der Cloudflare-Tunnel bringt das mit).
 
 Der eingebaute Scheduler kann mit `SCHEDULER_ENABLED=false` abgeschaltet und
 durch einen externen Zeitplan ersetzt werden, der `npm run plan:run` aufruft.
 
----
+### Auf dem Telefon
+
+Die Oberfläche ist für das Telefon ausgelegt und als Web-App installierbar:
+in Safari aufrufen, *Teilen → Zum Home-Bildschirm*. Danach startet AutoHouse
+im Vollbild mit eigenem Symbol – kein App Store, kein Entwicklerkonto.
+Details in [docs/hosting.md](docs/hosting.md#9-auf-dem-iphone-installieren).
 
 ## Grenzen und Verantwortung
 
