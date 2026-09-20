@@ -792,8 +792,40 @@ Image bereitsteht – kein roter Lauf.
 | Posten | Preis |
 | --- | --- |
 | VPS (Hetzner CX22 o. ä.) | ca. 4,50 € / Monat |
-| Domain | hast du schon |
+| Subdomain deiner vorhandenen Domain | 0 € |
 | Cloudflare Tunnel + Access (Free, bis 50 Nutzer) | 0 € |
 | App Store Entwicklerkonto | entfällt – 99 € / Jahr gespart |
 
 Rund 55 € im Jahr, und der Server hat nebenbei Luft für andere Dienste.
+
+### Keine zweite Domain nötig
+
+Eine **Subdomain kostet nichts**. `autohouse.deine-domain.de` ist ein
+DNS-Eintrag unter der Domain, die du ohnehin hast – davon kannst du beliebig
+viele anlegen, für weitere Dienste später genauso. Der Tunnel legt den
+Eintrag in Abschnitt 4.5 selbst an.
+
+### Wenn du gar keine Domain hättest
+
+Zur Einordnung, falls das Projekt einmal ohne eigene Domain laufen soll:
+
+| Weg | Kosten | Haken |
+| --- | --- | --- |
+| Eigene Domain bei Cloudflare | ca. 5–10 € / Jahr (`.de`, zum Einkaufspreis) | – |
+| **Tailscale Funnel** | 0 € | Adresse `<gerät>.<tailnet>.ts.net`, gültiges HTTPS; dafür kein Cloudflare Access davor – es schützt nur der Login von AutoHouse |
+| Tailscale ohne Funnel | 0 € | Nicht öffentlich: jede Person installiert Tailscale und tritt deinem Netz bei. Am sichersten, aber unbequem für Gäste |
+| TryCloudflare (`cloudflared tunnel --url …`) | 0 € | Zufällige Adresse, die sich bei jedem Neustart ändert. Nur zum Vorführen, nicht für den Dauerbetrieb |
+| DynDNS (DuckDNS, No-IP) | 0 € | Lässt sich nicht als Cloudflare-Zone führen – damit entfallen Tunnel und Access, und du musst selbst Ports öffnen und Zertifikate pflegen |
+
+### Der eigentliche Hebel ist der Server, nicht die Domain
+
+Wenn es billiger werden soll, ist der VPS der einzige nennenswerte Posten.
+Er lässt sich durch Hardware ersetzen, die bei dir ohnehin läuft: ein
+Raspberry Pi 4/5 mit 4 GB, ein Mini-PC, ein NAS mit Docker. Die Anleitung
+bleibt Wort für Wort dieselbe – der Tunnel baut die Verbindung von innen nach
+außen auf, es braucht also weiterhin weder feste IP noch Portfreigabe im
+Router.
+
+Strom für einen Pi liegt bei ungefähr 1–2 € im Monat. Der Haken: Der Rechner
+muss laufen, wenn ein Bestelltermin fällig ist. Verpasste Termine holt der
+Scheduler nach dem Start nach, aber eben erst dann.
