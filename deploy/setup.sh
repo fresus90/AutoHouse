@@ -114,6 +114,17 @@ else
     read -r -p 'TUNNEL_TOKEN: ' TUNNEL_TOKEN || true
   fi
 
+  # Ein echter Tunnel-Token ist ein langer base64-Block. Kuerzeres ist fast
+  # immer ein aus der Anleitung kopierter Platzhalter – der Tunnel wuerde
+  # starten und still scheitern.
+  if [ -n "${TUNNEL_TOKEN:-}" ] && [ "${#TUNNEL_TOKEN}" -lt 40 ]; then
+    warn "Der angegebene TUNNEL_TOKEN ist nur ${#TUNNEL_TOKEN} Zeichen lang."
+    warn 'Das sieht nach einem Platzhalter aus. Der Tunnel wird nicht gestartet;'
+    warn 'den echten Token spaeter in der .env eintragen und dort'
+    warn 'COMPOSE_PROFILES=tunnel aktivieren.'
+    TUNNEL_TOKEN=''
+  fi
+
   if [ -n "${TUNNEL_TOKEN:-}" ]; then
     TUNNEL_PROFILE_LINE='COMPOSE_PROFILES=tunnel'
   else
@@ -155,6 +166,10 @@ EOF
   warn "ENCRYPTION_KEY = ${KEY}"
   warn 'Diesen Schluessel jetzt in den Passwortmanager kopieren.'
   warn 'Ohne ihn sind gespeicherte Shop-Zugangsdaten nach einem Verlust wertlos.'
+  warn 'Er ist ein Geheimnis: nicht in Chats, Tickets oder Protokolle einfuegen.'
+  warn 'Falls doch geschehen, solange noch keine Zugangsdaten gespeichert sind:'
+  warn '  NEU=$(openssl rand -hex 32)'
+  warn '  sed -i "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$NEU|" .env && docker compose up -d'
 fi
 
 # --- 8. Starten ------------------------------------------------------------
