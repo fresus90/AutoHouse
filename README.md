@@ -38,6 +38,12 @@ Für den Dauerbetrieb auf einem eigenen Server (Docker + Cloudflare Tunnel,
 Zugang für einen kleinen Kreis, Installation auf dem iPhone) gibt es eine
 eigene Anleitung: **[docs/hosting.md](docs/hosting.md)**.
 
+> AutoHouse lässt sich **nicht** auf Cloudflare Pages/Workers, Vercel oder
+> Netlify betreiben: Es braucht einen dauerhaft laufenden Prozess, Chromium
+> und eine beschreibbare Festplatte. Warum, und woher die Adresse stattdessen
+> kommt, steht in
+> [docs/hosting.md](docs/hosting.md#1-was-der-server-können-muss).
+
 Nur die Oberfläche ansehen, ohne irgendetwas einzurichten:
 
 ```bash

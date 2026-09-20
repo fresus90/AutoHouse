@@ -90,10 +90,36 @@ Tunnel aus Schritt 4 gedacht.
 
 ## 1. Was der Server können muss
 
-AutoHouse startet für jede Bestellung einen echten Chromium. Das schließt
-Serverless-Dienste (Vercel, Netlify, Cloudflare Workers) aus: Es braucht einen
-dauerhaft laufenden Prozess, echten Arbeitsspeicher und eine Festplatte, die
-Neustarts überlebt.
+AutoHouse startet für jede Bestellung einen echten Chromium, hält die Termine
+in einem dauerlaufenden Scheduler und speichert alles in einer SQLite-Datei.
+Es braucht also einen **dauerhaft laufenden Prozess**, echten Arbeitsspeicher
+und eine Festplatte, die Neustarts überlebt.
+
+> ### Warum nicht Cloudflare Pages, Workers, Vercel oder Netlify
+>
+> Diese Dienste führen pro Anfrage kurz Code aus und liefern ansonsten
+> statische Dateien. Sie können nichts davon:
+>
+> | AutoHouse braucht | Pages / Workers / Vercel |
+> | --- | --- |
+> | einen Prozess, der auch ohne Besucher läuft (Scheduler) | nein – Code läuft nur pro Anfrage |
+> | Chromium starten (Playwright) | nein – kein eigener Prozess, keine Systembibliotheken |
+> | eine Datei, die Neustarts überlebt (SQLite) | nein – kein beschreibbares Dateisystem |
+> | Minuten Laufzeit je Bestellung | nein – Sekunden pro Anfrage |
+>
+> Ein Deploy dorthin bringt bestenfalls die Oberfläche hoch; jeder Aufruf von
+> `/api/...` läuft ins Leere, also schon die Anmeldung.
+>
+> **Auch für die Adresse braucht es Pages nicht.** Der Hostname entsteht in
+> Abschnitt 4: Der Tunnel legt beim Speichern der öffentlichen Adresse selbst
+> einen DNS-Eintrag unter deiner Domain an, z. B.
+> `autohouse.deine-domain.de`. Pages würde nur eine zusätzliche
+> `*.pages.dev`-Adresse vergeben, die hier niemand benutzt.
+>
+> Frontend getrennt auf Pages und nur die API auf dem Server – technisch
+> denkbar, praktisch sinnlos: Der Express-Server liefert die gebaute
+> Oberfläche bereits mit aus, und getrennte Adressen brechen die
+> Sitzungs-Cookies, die auf gleiche Herkunft angewiesen sind.
 
 **Mindestens:** 2 CPU-Kerne, 2 GB RAM, 20 GB SSD.
 **Angenehm:** 2 Kerne, 4 GB RAM, 40 GB SSD.
