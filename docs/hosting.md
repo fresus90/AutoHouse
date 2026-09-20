@@ -251,41 +251,135 @@ Der Tunnel ist der Grund, warum am Server kein Port offen sein muss:
 `cloudflared` baut die Verbindung zu Cloudflare selbst auf. Von außen ist der
 Server unsichtbar; erreichbar ist nur, was du im Tunnel freigibst.
 
-1. [one.dash.cloudflare.com](https://one.dash.cloudflare.com) öffnen
-   (Zero Trust). Beim ersten Mal fragt Cloudflare nach einem Team-Namen und
-   einem Tarif – **Free** wählen (bis 50 Nutzer, für unseren Zweck kostenlos;
-   je nach Ansicht wird eine Zahlungsmethode hinterlegt, ohne Kosten).
-2. **Networks → Tunnels → Create a tunnel → Cloudflared**.
-3. Namen vergeben, z. B. `autohouse`. → **Save tunnel**.
-4. Cloudflare zeigt jetzt Installationsbefehle an. Du brauchst davon nur den
-   **Token** – die lange Zeichenkette hinter `--token` (beginnt mit `ey…`).
-   Kopieren und in die `.env` eintragen:
+Cloudflare beschriftet Menüpunkte gelegentlich um. Wo ein Name nicht passt,
+steht unten jeweils, wonach du suchst.
 
-   ```ini
-   TUNNEL_TOKEN=eyJhIjoi…
-   ```
+### 4.1 Voraussetzung prüfen
 
-5. Auf **Next** klicken und die öffentliche Adresse festlegen:
+Auf [dash.cloudflare.com](https://dash.cloudflare.com) muss deine Domain in
+der Liste stehen und den Status **Active** haben. Bei einer über Cloudflare
+registrierten Domain ist das automatisch so. Steht dort *Pending nameserver
+update*, warte damit, bis es *Active* ist – sonst legt der Tunnel zwar einen
+DNS-Eintrag an, aber niemand fragt ihn ab.
 
-   | Feld | Wert |
-   | --- | --- |
-   | Subdomain | `autohouse` |
-   | Domain | deine Domain aus der Liste |
-   | Path | leer lassen |
-   | Type | `HTTP` |
-   | URL | `app:4000` |
+### 4.2 Zero Trust einmalig einrichten
 
-   `app` ist der Name des Dienstes aus der `docker-compose.yml`; beide Container
-   liegen im selben Docker-Netzwerk und finden sich darüber.
+Zero Trust ist der Bereich, in dem Tunnel und Zugangsregeln liegen.
 
-6. **Save hostname**. Cloudflare legt den DNS-Eintrag für
-   `autohouse.deine-domain.de` automatisch an – du musst nichts von Hand
-   eintragen.
+1. [one.dash.cloudflare.com](https://one.dash.cloudflare.com) öffnen.
+2. Beim allerersten Mal fragt Cloudflare nach einem **Team-Namen**. Der wird
+   Teil der Anmeldeadresse `https://<team>.cloudflareaccess.com`, die deine
+   Freunde später zu sehen bekommen – also etwas Kurzes, Bleibendes
+   (z. B. dein Nachname oder Haushaltsname). Nachträglich ändern geht, ist
+   aber lästig.
+3. Tarif: **Free** (bis 50 Nutzer). Cloudflare verlangt dabei eine
+   Zahlungsmethode – berechnet wird auf diesem Tarif nichts.
 
-> Dass hinter dem Tunnel unverschlüsseltes HTTP steht, ist in Ordnung: Die
-> Strecke Browser → Cloudflare ist HTTPS, die Strecke Cloudflare → Server läuft
-> verschlüsselt im Tunnel, und die letzten Zentimeter bleiben innerhalb des
-> Servers.
+### 4.3 Tunnel anlegen
+
+1. Links **Networks → Tunnels** (in älteren Ansichten: *Access → Tunnels*).
+2. **Create a tunnel** → Connector-Typ **Cloudflared** → **Next**.
+3. Name: `autohouse` → **Save tunnel**.
+
+Danach zeigt Cloudflare eine Seite *Install and run a connector* mit
+Befehlen für verschiedene Betriebssysteme. **Führe keinen davon aus** –
+`cloudflared` läuft bei uns schon als Container. Du brauchst nur den
+**Token**: die lange Zeichenkette hinter `--token` im angezeigten Befehl.
+Sie beginnt mit `eyJ` und ist mehrere hundert Zeichen lang.
+
+> Die drei Punkte in den Beispielen dieser Anleitung (`ey…`) stehen für den
+> Rest des Tokens. Kopiere immer die **ganze** Zeichenkette.
+
+### 4.4 Token eintragen und den Tunnel starten
+
+Auf dem Server:
+
+```bash
+cd /home/autohouse/AutoHouse
+nano .env
+```
+
+Zwei Zeilen setzen – den Token einfügen und das Profil aktivieren:
+
+```ini
+TUNNEL_TOKEN=eyJhIjoiMGYxZDM0NmU4ZDk5YzExZmE1NDkwNjQ4ZDgyMjM3ZWEiLCJ0Ijoi…
+COMPOSE_PROFILES=tunnel
+```
+
+Speichern (in `nano`: `Strg+O`, `Enter`, `Strg+X`), dann:
+
+```bash
+docker compose up -d
+docker compose logs --tail 20 tunnel
+```
+
+**Checkpoint.** Im Log muss stehen:
+
+```
+Registered tunnel connection  connIndex=0 ...
+```
+
+Meist erscheinen zwei bis vier solcher Zeilen – Cloudflare baut mehrere
+Verbindungen auf. Steht dort stattdessen `Couldn't decode the token` oder
+`provided Tunnel token is not valid`, wurde der Token unvollständig kopiert.
+
+Im Dashboard wechselt der Tunnel jetzt von *Inactive* auf **Healthy**.
+
+### 4.5 Öffentliche Adresse festlegen
+
+Zurück im Dashboard beim Tunnel: **Public Hostname** → **Add a public
+hostname** (je nach Ansicht heißt der Schritt *Route Traffic* oder
+*Published application routes*).
+
+| Feld | Wert |
+| --- | --- |
+| Subdomain | `autohouse` |
+| Domain | deine Domain aus der Auswahlliste |
+| Path | leer lassen |
+| Type | `HTTP` |
+| URL | `app:4000` |
+
+**Save hostname.**
+
+Zwei Dinge, die hier gern schiefgehen:
+
+- Bei *Type* wirklich **HTTP** wählen, nicht HTTPS. Innerhalb des
+  Docker-Netzwerks spricht die App einfaches HTTP.
+- Bei *URL* steht `app:4000` – kein `http://` davor, keine IP-Adresse.
+  `app` ist der Dienstname aus der `docker-compose.yml`; beide Container
+  liegen im selben Docker-Netzwerk und finden sich über diesen Namen.
+
+> Dass hinter dem Tunnel unverschlüsseltes HTTP läuft, ist in Ordnung: Die
+> Strecke Browser → Cloudflare ist HTTPS, die Strecke Cloudflare → Server
+> läuft verschlüsselt im Tunnel, und die letzten Zentimeter bleiben innerhalb
+> des Servers.
+
+### 4.6 DNS prüfen – aber nichts von Hand anlegen
+
+Cloudflare legt den Eintrag selbst an. Unter **dash.cloudflare.com → deine
+Domain → DNS → Records** taucht jetzt auf:
+
+| Typ | Name | Inhalt | Proxy |
+| --- | --- | --- | --- |
+| CNAME | `autohouse` | `<tunnel-id>.cfargotunnel.com` | Proxied (orange Wolke) |
+
+Lege hier **keinen** eigenen A- oder CNAME-Eintrag für `autohouse` an. Ein
+von Hand gesetzter Eintrag kollidiert mit dem des Tunnels, und die Wolke muss
+orange bleiben – grau (*DNS only*) umgeht den Tunnel und führt ins Leere.
+
+### 4.7 Erster Aufruf
+
+```bash
+curl -I https://autohouse.deine-domain.de
+```
+
+Erwartet wird `HTTP/2 200`. Im Browser erscheint die Einrichtungsseite von
+AutoHouse. **Lege hier noch kein Konto an** – erst kommt der Zugangsschutz in
+Abschnitt 6, sonst steht die Anmeldeseite kurzzeitig offen im Netz.
+
+Kommt eine Cloudflare-Fehlerseite, hilft die Tabelle in Abschnitt 11: `1033`
+heißt Tunnel nicht verbunden, `502` heißt Tunnel steht, aber die App
+antwortet nicht.
 
 ---
 
@@ -326,31 +420,80 @@ davor: Dann erreicht die App überhaupt nur, wer auf deiner Liste steht. Der
 Rest des Internets – Scanner, Bots, Zufallsfunde – sieht nur eine
 Anmeldeseite von Cloudflare.
 
-1. Zero Trust → **Access → Applications → Add an application → Self-hosted**.
-2. **Application name**: `AutoHouse`.
-   **Session Duration**: `1 month` (sonst fragt das iPhone ständig nach).
-3. **Public hostname**: Subdomain `autohouse` + deine Domain.
-4. Weiter zu **Policies → Add a policy**:
+Zwei Türen also: erst Cloudflare (alle vier Wochen), dann AutoHouse (bestimmt
+durch `SESSION_TTL_DAYS`).
 
-   | Feld | Wert |
-   | --- | --- |
-   | Policy name | `Freundeskreis` |
-   | Action | `Allow` |
-   | Include → Selector | `Emails` |
-   | Value | deine Adresse und die deiner Freunde, je eine pro Zeile |
+### 6.1 Anwendung anlegen
 
-   Statt einzelner Adressen geht auch `Emails ending in` für eine ganze Domain.
-5. Bei den **Login methods** reicht **One-time PIN**: Deine Freunde bekommen
-   einen sechsstelligen Code per Mail, brauchen also kein Konto bei Google
-   oder GitHub. → **Save**.
+Zero Trust → **Access → Applications → Add an application** → **Self-hosted**.
 
-Ab jetzt fragt Cloudflare beim Aufruf zuerst nach der E-Mail-Adresse, danach
-kommt der AutoHouse-Login. Zwei Türen – die erste geht nur alle vier Wochen
-wieder zu.
+| Feld | Wert |
+| --- | --- |
+| Application name | `AutoHouse` |
+| Session Duration | `1 month` |
+| Subdomain | `autohouse` |
+| Domain | deine Domain |
+| Path | leer lassen |
+
+Die Adresse muss exakt die aus Abschnitt 4.5 sein. Weicht sie ab, greift die
+Regel nicht und die App steht offen.
+
+### 6.2 Regel festlegen
+
+Im nächsten Schritt (*Policies*, je nach Ansicht *Add policy* oder
+*Create new policy*):
+
+| Feld | Wert |
+| --- | --- |
+| Policy name | `Freundeskreis` |
+| Action | `Allow` |
+| Include → Selector | `Emails` |
+| Value | deine Adresse, dann je eine weitere pro Zeile |
+
+Für eine ganze Domain gibt es stattdessen den Selector `Emails ending in`.
+
+**Trag dich selbst zuerst ein.** Wer nicht in der Liste steht, kommt nicht
+mehr rein – auch du nicht.
+
+### 6.3 Anmeldeverfahren
+
+Unter **Login methods** reicht **One-time PIN**. Deine Freunde geben ihre
+E-Mail-Adresse ein, bekommen einen sechsstelligen Code zugeschickt und sind
+drin – kein Konto bei Google, GitHub oder sonstwo nötig. One-time PIN ist ab
+Werk aktiv; lass ruhig *Accept all available identity providers* stehen,
+solange du keinen anderen Anbieter eingerichtet hast.
+
+**Save application.**
+
+### 6.4 Prüfen
+
+Ruf `https://autohouse.deine-domain.de` in einem **privaten Fenster** auf
+(sonst bist du womöglich schon angemeldet). Erwarteter Ablauf:
+
+1. Cloudflare fragt nach der E-Mail-Adresse
+2. Code aus der Mail eingeben
+3. danach erst die Anmeldeseite von AutoHouse
+
+Kommt AutoHouse sofort ohne Cloudflare-Abfrage, passt die Adresse in der
+Anwendung nicht zu der im Tunnel – Schreibweise in 6.1 vergleichen.
+
+Teste zusätzlich mit einer Adresse, die **nicht** auf der Liste steht: Da
+muss Cloudflare abweisen. Das ist der eigentliche Beweis, dass die Regel
+greift.
+
+### 6.5 Was deine Freunde brauchen
+
+Schick ihnen drei Zeilen:
+
+> 1. `https://autohouse.deine-domain.de` in **Safari** öffnen
+> 2. E-Mail-Adresse eingeben, Code aus der Mail eintippen
+> 3. mit den Zugangsdaten anmelden, die du mitgeschickt hast
+
+Für das Symbol auf dem Home-Bildschirm siehe Abschnitt 9.
 
 > **Wenn du Access weglässt:** Die App ist trotzdem passwortgeschützt und die
-> Registrierung schließt sich nach dem ersten Konto. Aber die Anmeldeseite wäre
-> für jeden im Internet sichtbar. Mit Access ist sie es nicht.
+> Registrierung schließt sich nach dem ersten Konto. Aber die Anmeldeseite
+> wäre für jeden im Internet sichtbar. Mit Access ist sie es nicht.
 
 ---
 
@@ -531,7 +674,11 @@ docker compose exec app sh -c 'find /app/data/runs -type f -mtime +30 -delete'
 
 | Symptom | Ursache | Abhilfe |
 | --- | --- | --- |
-| Cloudflare zeigt **Error 1033** | Tunnel nicht verbunden | `docker compose logs tunnel`; meist ein falscher `TUNNEL_TOKEN` |
+| Cloudflare zeigt **Error 1033** | Tunnel nicht verbunden | `docker compose logs tunnel`; meist ein unvollständig kopierter `TUNNEL_TOKEN` |
+| `Couldn't decode the token` im Tunnel-Log | Token unvollständig oder Platzhalter | Ganze Zeichenkette hinter `--token` erneut kopieren |
+| Tunnel-Log bleibt leer, nur `app` läuft | `COMPOSE_PROFILES=tunnel` fehlt | Zeile in die `.env`, dann `docker compose up -d` |
+| Seite meldet **DNS_PROBE_FINISHED_NXDOMAIN** | Öffentliche Adresse noch nicht gespeichert | Abschnitt 4.5; danach steht der CNAME unter DNS → Records |
+| Cloudflare-Anmeldung erscheint gar nicht | Adresse in der Access-Anwendung weicht ab | Abschnitt 6.1, Schreibweise vergleichen |
 | Cloudflare zeigt **Error 502** | Tunnel läuft, App nicht | `docker compose ps`, `docker compose logs app` |
 | Cloudflare zeigt **Error 524** beim Verbindungstest | Cloudflare bricht nach 100 s ab; der Login im Hintergrund läuft weiter | Seite neu laden, der Shop-Status ist meist schon aktualisiert |
 | `fatal: Remote branch main not found` | Der Standardzweig heißt anders | Ohne `--branch` klonen; das Setup-Skript tut das seit der aktuellen Fassung von selbst |
