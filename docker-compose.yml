@@ -47,13 +47,17 @@ services:
     #   - "127.0.0.1:4000:4000"
 
   # Verbindet den Server mit Cloudflare – ohne offenen Port, ohne feste IP.
-  # TUNNEL_TOKEN kommt aus dem Cloudflare-Dashboard (siehe docs/hosting.md).
+  #
+  # Der Dienst haengt am Profil "tunnel" und startet nur, wenn in der .env
+  # COMPOSE_PROFILES=tunnel steht. So laeuft "docker compose up -d" auch
+  # solange, wie noch kein Token hinterlegt ist – dann eben ohne Tunnel.
   tunnel:
+    profiles: ['tunnel']
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN fehlt in der .env}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on:
       - app
 

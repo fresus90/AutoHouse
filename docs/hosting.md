@@ -132,6 +132,9 @@ Die folgenden Befehle gehen von **Ubuntu 24.04** aus.
 > Container an. Den Token holst du dir vorher aus Schritt 4 – oder lässt ihn
 > weg und trägst ihn später nach. Wer lieber weiß, was passiert, geht die
 > Schritte unten von Hand durch; das Skript tut genau dasselbe.
+>
+> Geholt wird der **Standardzweig** des Repositorys. Einen bestimmten Zweig
+> nimmt `REPO_BRANCH=<name> bash …/setup.sh`.
 
 Nach dem Anlegen des Servers per SSH verbinden (`ssh root@<server-ip>`).
 
@@ -191,6 +194,12 @@ cd AutoHouse
 cp .env.example .env
 ```
 
+`git clone` ohne weitere Angabe holt den Standardzweig – der heißt nicht
+zwingend `main`. Welcher es ist, zeigt `git branch --show-current`. Wer es
+konventionell mag, benennt den Zweig einmalig auf GitHub um (*Settings →
+General → Default branch*); nötig ist das nicht, die Auslieferung in
+Abschnitt 12 richtet sich ohnehin nach dem Standardzweig.
+
 Jetzt den Verschlüsselungsschlüssel erzeugen. Mit ihm werden die
 Shop-Zugangsdaten und die gespeicherten Browser-Sessions verschlüsselt:
 
@@ -216,7 +225,13 @@ HEADLESS=true
 
 # wird in Schritt 4 gefüllt
 TUNNEL_TOKEN=
+# Diese Zeile einkommentieren, sobald der Token eingetragen ist –
+# sie schaltet den Tunnel-Dienst ein.
+# COMPOSE_PROFILES=tunnel
 ```
+
+> Ohne `COMPOSE_PROFILES=tunnel` startet nur die App. Das ist Absicht: So
+> lässt sich alles schon einrichten und testen, bevor der Tunnel steht.
 
 Die `.env` gehört niemandem sonst:
 
@@ -279,6 +294,9 @@ Server unsichtbar; erreichbar ist nur, was du im Tunnel freigibst.
 ```bash
 docker compose up -d --build
 ```
+
+Startet nur `app` und du erwartest auch den Tunnel? Dann fehlt in der `.env`
+die Zeile `COMPOSE_PROFILES=tunnel`. Nachtragen und den Befehl wiederholen.
 
 Der erste Durchlauf dauert ein paar Minuten – Chromium und seine
 Systembibliotheken werden ins Image gepackt. Danach:
@@ -516,6 +534,9 @@ docker compose exec app sh -c 'find /app/data/runs -type f -mtime +30 -delete'
 | Cloudflare zeigt **Error 1033** | Tunnel nicht verbunden | `docker compose logs tunnel`; meist ein falscher `TUNNEL_TOKEN` |
 | Cloudflare zeigt **Error 502** | Tunnel läuft, App nicht | `docker compose ps`, `docker compose logs app` |
 | Cloudflare zeigt **Error 524** beim Verbindungstest | Cloudflare bricht nach 100 s ab; der Login im Hintergrund läuft weiter | Seite neu laden, der Shop-Status ist meist schon aktualisiert |
+| `fatal: Remote branch main not found` | Der Standardzweig heißt anders | Ohne `--branch` klonen; das Setup-Skript tut das seit der aktuellen Fassung von selbst |
+| `required variable TUNNEL_TOKEN is missing a value` | Ältere `docker-compose.yml` | `git pull`; der Tunnel hängt jetzt am Profil `tunnel` |
+| `docker compose up` startet nur `app` | `COMPOSE_PROFILES=tunnel` fehlt in der `.env` | Zeile ergänzen |
 | Container startet neu in Schleife | `ENCRYPTION_KEY` fehlt oder ist zu kurz | 64 Hex-Zeichen, siehe Schritt 3 |
 | Lauf endet mit *Aktion nötig* | Captcha, kein Login, Mindestbestellwert | Details unter *Läufe*, Screenshots ansehen |
 | Lauf bricht ohne Meldung ab, Container startet neu | Arbeitsspeicher voll | Swap anlegen (Schritt 2d), `MAX_CONCURRENT_RUNS=1` |

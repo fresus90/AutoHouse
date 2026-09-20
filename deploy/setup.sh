@@ -16,7 +16,9 @@ set -euo pipefail
 APP_USER="${APP_USER:-autohouse}"
 APP_DIR="/home/${APP_USER}/AutoHouse"
 REPO_URL="${REPO_URL:-https://github.com/fresus90/AutoHouse.git}"
-REPO_BRANCH="${REPO_BRANCH:-main}"
+# Leer = der Standardzweig des Repositorys. Einen bestimmten Zweig holt man
+# mit REPO_BRANCH=<name> bash setup.sh
+REPO_BRANCH="${REPO_BRANCH:-}"
 
 info()  { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 warn()  { printf '\033[1;33m    %s\033[0m\n' "$*"; }
@@ -68,7 +70,7 @@ ufw --force default deny incoming >/dev/null
 ufw --force default allow outgoing >/dev/null
 ufw allow OpenSSH >/dev/null
 ufw --force enable >/dev/null
-ufw status | head -4
+ufw status verbose | sed -n '1,12p'
 
 # --- 5. Auslagerungsdatei bei wenig RAM ------------------------------------
 RAM_MB=$(free -m | awk '/^Mem:/ {print $2}')
@@ -87,8 +89,15 @@ if [ -d "${APP_DIR}/.git" ]; then
   sudo -u "$APP_USER" git -C "$APP_DIR" pull --ff-only
 else
   info 'Anwendung holen'
-  sudo -u "$APP_USER" git clone --branch "$REPO_BRANCH" "$REPO_URL" "$APP_DIR"
+  if [ -n "$REPO_BRANCH" ]; then
+    sudo -u "$APP_USER" git clone --branch "$REPO_BRANCH" "$REPO_URL" "$APP_DIR"
+  else
+    # Ohne Angabe den Standardzweig des Repositorys nehmen – der heisst
+    # nicht zwingend "main".
+    sudo -u "$APP_USER" git clone "$REPO_URL" "$APP_DIR"
+  fi
 fi
+info "Zweig: $(sudo -u "$APP_USER" git -C "$APP_DIR" rev-parse --abbrev-ref HEAD)"
 
 # --- 7. Konfiguration ------------------------------------------------------
 ENV_FILE="${APP_DIR}/.env"
@@ -103,6 +112,12 @@ else
     echo 'Token des Cloudflare-Tunnels einfuegen (leer lassen und Enter zum Ueberspringen).'
     echo 'Zu finden im Zero-Trust-Dashboard unter Networks -> Tunnels.'
     read -r -p 'TUNNEL_TOKEN: ' TUNNEL_TOKEN || true
+  fi
+
+  if [ -n "${TUNNEL_TOKEN:-}" ]; then
+    TUNNEL_PROFILE_LINE='COMPOSE_PROFILES=tunnel'
+  else
+    TUNNEL_PROFILE_LINE='# COMPOSE_PROFILES=tunnel'
   fi
 
   cat > "$ENV_FILE" <<EOF
@@ -124,8 +139,10 @@ SCHEDULER_TICK_MS=30000
 MAX_CONCURRENT_RUNS=1
 HEADLESS=true
 
-# Cloudflare-Tunnel
+# Cloudflare-Tunnel. COMPOSE_PROFILES=tunnel schaltet den Dienst ein;
+# ohne die Zeile startet nur die App.
 TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
+${TUNNEL_PROFILE_LINE}
 
 # Optional: fertiges Image aus der Registry statt lokalem Bau,
 # z. B. ghcr.io/fresus90/autohouse:latest
@@ -141,18 +158,17 @@ EOF
 fi
 
 # --- 8. Starten ------------------------------------------------------------
-if grep -q '^TUNNEL_TOKEN=$' "$ENV_FILE"; then
-  info 'Kein Tunnel-Token hinterlegt – die App wird ohne Tunnel gestartet'
-  warn "Token spaeter in ${ENV_FILE} eintragen, dann:"
-  warn "  sudo -u ${APP_USER} docker compose -f ${APP_DIR}/docker-compose.yml up -d"
-  START_ARGS=(up -d --build app)
-else
-  START_ARGS=(up -d --build)
+# Ob der Tunnel mitstartet, entscheidet COMPOSE_PROFILES in der .env.
+if ! grep -q '^COMPOSE_PROFILES=tunnel' "$ENV_FILE"; then
+  info 'Kein Tunnel-Token hinterlegt – es startet nur die App'
+  warn "Token spaeter in ${ENV_FILE} eintragen, dort ausserdem"
+  warn "die Zeile COMPOSE_PROFILES=tunnel aktivieren, dann:"
+  warn "  cd ${APP_DIR} && sudo -u ${APP_USER} docker compose up -d"
 fi
 
 info 'Container bauen und starten (der erste Bau dauert einige Minuten)'
 cd "$APP_DIR"
-sudo -u "$APP_USER" docker compose "${START_ARGS[@]}"
+sudo -u "$APP_USER" docker compose up -d --build
 
 # --- 9. Warten und pruefen -------------------------------------------------
 info 'Warte auf die Anwendung'
