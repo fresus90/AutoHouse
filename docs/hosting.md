@@ -280,15 +280,55 @@ Server unsichtbar; erreichbar ist nur, was du im Tunnel freigibst.
 Cloudflare beschriftet Menüpunkte gelegentlich um. Wo ein Name nicht passt,
 steht unten jeweils, wonach du suchst.
 
-### 4.1 Voraussetzung prüfen
+### 4.1 Domain besorgen und auf Cloudflare legen
+
+Gebraucht wird eine **eigene** Domain – nicht die eines Kundenprojekts, das
+im selben Cloudflare-Konto liegt. Dort hätte AutoHouse DNS-Einträge,
+Access-Regeln und Tunnel-Konfiguration in fremdem Bestand, und beim
+Projektende ginge alles mit unter.
+
+Eine Subdomain davon (`autohouse.deine-domain.de`) kostet später nichts
+extra; bezahlt wird einmal im Jahr die Domain selbst.
+
+**Wo kaufen.** Zwei Wege, beide in Ordnung:
+
+| Weg | Vorteil | Achtung |
+| --- | --- | --- |
+| **Cloudflare Registrar** (dash.cloudflare.com → *Domain Registration → Register Domains*) | Domain liegt sofort im richtigen Konto, Nameserver stimmen von selbst, Preis ohne Aufschlag | Nicht jede Endung im Angebot – `.de` ist dort nicht verlässlich zu bekommen |
+| Deutscher Anbieter (Netcup, INWX, Hetzner …) | `.de` ab etwa 5 € im Jahr | Nameserver müssen anschließend auf Cloudflare umgestellt werden |
+
+**Worauf du beim Kauf achtest:**
+
+- **Nur die Domain kaufen, kein Hosting-Paket.** Gebraucht wird ausschließlich
+  DNS. Webspace, Mailpostfächer und Baukästen treiben den Preis hoch und
+  werden hier nie benutzt.
+- **Den Verlängerungspreis ansehen, nicht den Erstjahrespreis.** Angebote für
+  1 € im ersten Jahr verlängern sich gern für 15 € oder mehr. Eine
+  unspektakuläre `.de` für konstant 6 € ist über die Jahre günstiger.
+- **Nameserver müssen frei änderbar sein.** Fast überall selbstverständlich;
+  Anbieter, die nur Weiterleitungen erlauben oder ihre eigenen Nameserver
+  erzwingen, scheiden aus.
+- Der Name ist gleichgültig – kurz und tippbar reicht. Gelesen wird er später
+  kaum, auf dem Home-Bildschirm steht nur „AutoHouse".
+
+**Danach auf Cloudflare legen** (entfällt beim Kauf über Cloudflare selbst):
+
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Add a domain** →
+   Domain eintragen → Tarif **Free**.
+2. Cloudflare nennt dir zwei Nameserver wie `xyz.ns.cloudflare.com`.
+3. Diese beim Registrar als Nameserver eintragen (meist unter *DNS* oder
+   *Nameserver verwalten*), die alten ersetzen.
+4. Warten, bis Cloudflare den Status auf **Active** setzt – meist Minuten,
+   gelegentlich bis zu 24 Stunden. Cloudflare schickt eine Mail.
+
+### 4.2 Voraussetzung prüfen
 
 Auf [dash.cloudflare.com](https://dash.cloudflare.com) muss deine Domain in
-der Liste stehen und den Status **Active** haben. Bei einer über Cloudflare
-registrierten Domain ist das automatisch so. Steht dort *Pending nameserver
-update*, warte damit, bis es *Active* ist – sonst legt der Tunnel zwar einen
+der Liste stehen und den Status **Active** haben. Steht dort *Pending
+nameserver update*, warte damit – sonst legt der Tunnel zwar einen
 DNS-Eintrag an, aber niemand fragt ihn ab.
 
-### 4.2 Zero Trust einmalig einrichten
+### 4.3 Zero Trust einmalig einrichten
 
 Zero Trust ist der Bereich, in dem Tunnel und Zugangsregeln liegen.
 
@@ -301,7 +341,7 @@ Zero Trust ist der Bereich, in dem Tunnel und Zugangsregeln liegen.
 3. Tarif: **Free** (bis 50 Nutzer). Cloudflare verlangt dabei eine
    Zahlungsmethode – berechnet wird auf diesem Tarif nichts.
 
-### 4.3 Tunnel anlegen
+### 4.4 Tunnel anlegen
 
 1. Links **Networks → Tunnels** (in älteren Ansichten: *Access → Tunnels*).
 2. **Create a tunnel** → Connector-Typ **Cloudflared** → **Next**.
@@ -316,7 +356,7 @@ Sie beginnt mit `eyJ` und ist mehrere hundert Zeichen lang.
 > Die drei Punkte in den Beispielen dieser Anleitung (`ey…`) stehen für den
 > Rest des Tokens. Kopiere immer die **ganze** Zeichenkette.
 
-### 4.4 Token eintragen und den Tunnel starten
+### 4.5 Token eintragen und den Tunnel starten
 
 Auf dem Server:
 
@@ -351,7 +391,7 @@ Verbindungen auf. Steht dort stattdessen `Couldn't decode the token` oder
 
 Im Dashboard wechselt der Tunnel jetzt von *Inactive* auf **Healthy**.
 
-### 4.5 Öffentliche Adresse festlegen
+### 4.6 Öffentliche Adresse festlegen
 
 Zurück im Dashboard beim Tunnel: **Public Hostname** → **Add a public
 hostname** (je nach Ansicht heißt der Schritt *Route Traffic* oder
@@ -380,7 +420,7 @@ Zwei Dinge, die hier gern schiefgehen:
 > läuft verschlüsselt im Tunnel, und die letzten Zentimeter bleiben innerhalb
 > des Servers.
 
-### 4.6 DNS prüfen – aber nichts von Hand anlegen
+### 4.7 DNS prüfen – aber nichts von Hand anlegen
 
 Cloudflare legt den Eintrag selbst an. Unter **dash.cloudflare.com → deine
 Domain → DNS → Records** taucht jetzt auf:
@@ -393,7 +433,7 @@ Lege hier **keinen** eigenen A- oder CNAME-Eintrag für `autohouse` an. Ein
 von Hand gesetzter Eintrag kollidiert mit dem des Tunnels, und die Wolke muss
 orange bleiben – grau (*DNS only*) umgeht den Tunnel und führt ins Leere.
 
-### 4.7 Erster Aufruf
+### 4.8 Erster Aufruf
 
 ```bash
 curl -I https://autohouse.deine-domain.de
@@ -461,7 +501,7 @@ Zero Trust → **Access → Applications → Add an application** → **Self-hos
 | Domain | deine Domain |
 | Path | leer lassen |
 
-Die Adresse muss exakt die aus Abschnitt 4.5 sein. Weicht sie ab, greift die
+Die Adresse muss exakt die aus Abschnitt 4.6 sein. Weicht sie ab, greift die
 Regel nicht und die App steht offen.
 
 ### 6.2 Regel festlegen
@@ -703,7 +743,7 @@ docker compose exec app sh -c 'find /app/data/runs -type f -mtime +30 -delete'
 | Cloudflare zeigt **Error 1033** | Tunnel nicht verbunden | `docker compose logs tunnel`; meist ein unvollständig kopierter `TUNNEL_TOKEN` |
 | `Couldn't decode the token` im Tunnel-Log | Token unvollständig oder Platzhalter | Ganze Zeichenkette hinter `--token` erneut kopieren |
 | Tunnel-Log bleibt leer, nur `app` läuft | `COMPOSE_PROFILES=tunnel` fehlt | Zeile in die `.env`, dann `docker compose up -d` |
-| Seite meldet **DNS_PROBE_FINISHED_NXDOMAIN** | Öffentliche Adresse noch nicht gespeichert | Abschnitt 4.5; danach steht der CNAME unter DNS → Records |
+| Seite meldet **DNS_PROBE_FINISHED_NXDOMAIN** | Öffentliche Adresse noch nicht gespeichert | Abschnitt 4.6; danach steht der CNAME unter DNS → Records |
 | Cloudflare-Anmeldung erscheint gar nicht | Adresse in der Access-Anwendung weicht ab | Abschnitt 6.1, Schreibweise vergleichen |
 | Cloudflare zeigt **Error 502** | Tunnel läuft, App nicht | `docker compose ps`, `docker compose logs app` |
 | Cloudflare zeigt **Error 524** beim Verbindungstest | Cloudflare bricht nach 100 s ab; der Login im Hintergrund läuft weiter | Seite neu laden, der Shop-Status ist meist schon aktualisiert |
@@ -792,18 +832,18 @@ Image bereitsteht – kein roter Lauf.
 | Posten | Preis |
 | --- | --- |
 | VPS (Hetzner CX22 o. ä.) | ca. 4,50 € / Monat |
-| Subdomain deiner vorhandenen Domain | 0 € |
+| Eigene Domain (siehe Abschnitt 4.1) | ca. 5–15 € / Jahr |
+| Subdomains davon, beliebig viele | 0 € |
 | Cloudflare Tunnel + Access (Free, bis 50 Nutzer) | 0 € |
 | App Store Entwicklerkonto | entfällt – 99 € / Jahr gespart |
 
-Rund 55 € im Jahr, und der Server hat nebenbei Luft für andere Dienste.
+Rund 60 € im Jahr, und der Server hat nebenbei Luft für andere Dienste.
 
-### Keine zweite Domain nötig
+### Eine Domain reicht für alles
 
-Eine **Subdomain kostet nichts**. `autohouse.deine-domain.de` ist ein
-DNS-Eintrag unter der Domain, die du ohnehin hast – davon kannst du beliebig
-viele anlegen, für weitere Dienste später genauso. Der Tunnel legt den
-Eintrag in Abschnitt 4.5 selbst an.
+`autohouse.deine-domain.de` ist nur ein DNS-Eintrag unter deiner Domain.
+Davon kannst du beliebig viele anlegen, für spätere Dienste genauso – ohne
+Zusatzkosten. Den Eintrag legt der Tunnel in Abschnitt 4.6 selbst an.
 
 ### Wenn du gar keine Domain hättest
 
