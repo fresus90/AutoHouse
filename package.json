@@ -21,6 +21,7 @@
     "user:create": "tsx src/cli/create-user.ts",
     "shop:login": "tsx src/cli/shop-login.ts",
     "shop:session": "tsx src/cli/shop-session.ts",
+    "shop:inspect": "tsx src/cli/shop-inspect.ts",
     "plan:run": "tsx src/cli/run-plan.ts",
     "postinstall": "node scripts/check-browser.mjs"
   },

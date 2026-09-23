@@ -121,3 +121,113 @@ export async function typeLikeHuman(page: Page, selector: string, value: string)
     await field.type(char, { delay: 40 + Math.random() * 80 });
   }
 }
+
+/**
+ * Sucht das Eingabefeld fuer die Postleitzahl und gibt einen Selektor zurueck.
+ *
+ * Erst die bekannten Selektoren; findet keiner etwas, werden alle sichtbaren
+ * Eingabefelder anhand von Beschriftung, Platzhalter, Name und Feldlaenge
+ * geprueft. Der Treffer wird markiert, damit ein stabiler Selektor
+ * zurueckgegeben werden kann. Das ueberlebt die meisten Umbauten des Shops,
+ * ohne dass jemand Selektoren nachtragen muss.
+ */
+export async function findPostalCodeInput(
+  page: Page,
+  knownSelectors: string[],
+): Promise<string | null> {
+  const known = await firstVisible(page, knownSelectors, 6000);
+  if (known) return known;
+
+  const marker = 'data-autohouse-plz';
+  const found = await page
+    .evaluate((attribute) => {
+      const hints = /(plz|postleit|zip|postal)/i;
+      const inputs = Array.from(document.querySelectorAll('input'));
+      const visible = inputs.filter((input) => {
+        const rect = input.getBoundingClientRect();
+        const style = window.getComputedStyle(input);
+        const usable = ['text', 'tel', 'number', 'search', ''].includes(input.type);
+        return usable && rect.width > 20 && rect.height > 10 && style.visibility !== 'hidden';
+      });
+
+      const describe = (input: HTMLInputElement): string =>
+        [
+          input.name,
+          input.id,
+          input.placeholder,
+          input.getAttribute('aria-label') ?? '',
+          input.labels?.[0]?.textContent ?? '',
+          input.closest('label')?.textContent ?? '',
+        ].join(' ');
+
+      const match =
+        visible.find((input) => hints.test(describe(input))) ??
+        visible.find(
+          (input) => input.maxLength === 5 || input.getAttribute('inputmode') === 'numeric',
+        ) ??
+        (visible.length === 1 ? visible[0] : undefined);
+
+      if (!match) return false;
+      match.setAttribute(attribute, '1');
+      return true;
+    }, marker)
+    .catch(() => false);
+
+  return found ? `[${marker}="1"]` : null;
+}
+
+/**
+ * Kurzbericht ueber die Bedienelemente einer Seite – die Grundlage, um
+ * Selektoren nachzuziehen, wenn ein Shop sein Frontend umgebaut hat.
+ */
+export interface PageReport {
+  url: string;
+  title: string;
+  inputs: Array<Record<string, string>>;
+  buttons: Array<Record<string, string>>;
+}
+
+export async function describePage(page: Page, limit = 25): Promise<PageReport> {
+  const collected = await page.evaluate((max) => {
+    const visible = (element: Element): boolean => {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return rect.width > 4 && rect.height > 4 && style.visibility !== 'hidden' && style.display !== 'none';
+    };
+    const clean = (value: string | null | undefined): string =>
+      (value ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const attrs = (element: Element, names: string[]): Record<string, string> => {
+      const out: Record<string, string> = {};
+      for (const name of names) {
+        const value = clean(element.getAttribute(name));
+        if (value) out[name] = value;
+      }
+      return out;
+    };
+
+    const inputs = Array.from(document.querySelectorAll('input, select, textarea'))
+      .filter(visible)
+      .slice(0, max)
+      .map((element): Record<string, string> => ({
+        tag: element.tagName.toLowerCase(),
+        ...attrs(element, [
+          'type', 'id', 'name', 'placeholder', 'aria-label', 'inputmode',
+          'maxlength', 'data-testid', 'autocomplete',
+        ]),
+      }));
+
+    const buttons = Array.from(document.querySelectorAll('button, a[href], [role="button"]'))
+      .filter(visible)
+      .map((element): Record<string, string> => ({
+        tag: element.tagName.toLowerCase(),
+        text: clean(element.textContent),
+        ...attrs(element, ['id', 'name', 'data-testid', 'aria-label', 'href']),
+      }))
+      .filter((entry) => entry['text'] || entry['data-testid'])
+      .slice(0, max);
+
+    return { title: document.title, inputs, buttons };
+  }, limit);
+
+  return { url: page.url(), title: collected.title, inputs: collected.inputs, buttons: collected.buttons };
+}

@@ -3,7 +3,9 @@
     "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2023"],
+    // DOM wird gebraucht, weil die an page.evaluate() uebergebenen Funktionen
+    // im Browser laufen und dort document, window & Co. benutzen.
+    "lib": ["ES2023", "DOM"],
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,

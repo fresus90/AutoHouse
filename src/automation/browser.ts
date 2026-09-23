@@ -71,6 +71,12 @@ export async function createSession(options: {
   context.setDefaultTimeout(config.browser.timeoutMs);
   context.setDefaultNavigationTimeout(config.browser.timeoutMs);
 
+  // tsx/esbuild versieht benannte Funktionen mit einem __name-Helfer. Der
+  // existiert im Seitenkontext nicht, weshalb jedes page.evaluate(...) im
+  // Entwicklungsbetrieb sonst mit "__name is not defined" abbricht. Als
+  // Zeichenkette uebergeben, damit der Helfer nicht selbst transformiert wird.
+  await context.addInitScript({ content: 'globalThis.__name ||= (fn) => fn;' });
+
   // Kleine Angleichung an einen normalen Browser.
   await context.addInitScript(() => {
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });

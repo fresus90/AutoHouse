@@ -9,7 +9,14 @@ import {
   type ProductCandidate,
   type ShopDriver,
 } from '../types.js';
-import { dismissConsentBanner, firstVisible, parsePriceToCents, typeLikeHuman } from '../util.js';
+import {
+  describePage,
+  dismissConsentBanner,
+  findPostalCodeInput,
+  firstVisible,
+  parsePriceToCents,
+  typeLikeHuman,
+} from '../util.js';
 
 /**
  * REWE Lieferservice (shop.rewe.de)
@@ -48,8 +55,15 @@ export const REWE = {
     ],
     postalCodeInput: [
       'input[data-testid="marketsearch-input"]',
+      'input[data-testid="zip-code-input"]',
       'input[name="zipCode"]',
-      'input[placeholder*="Postleitzahl"]',
+      'input[name*="postal" i]',
+      'input[id*="zip" i]',
+      'input[id*="plz" i]',
+      'input[placeholder*="Postleitzahl" i]',
+      'input[placeholder*="PLZ" i]',
+      'input[aria-label*="Postleitzahl" i]',
+      'input[inputmode="numeric"][maxlength="5"]',
     ],
     deliveryServiceButton: [
       'button[data-testid="delivery-service-button"]',
@@ -91,7 +105,14 @@ export class ReweDriver implements ShopDriver {
     await this.ensureMarket(ctx);
   }
 
-  /** Liefergebiet setzen – ohne Markt liefert die Suche keine Preise. */
+  /**
+   * Liefergebiet setzen – ohne Markt liefert die Suche keine Preise.
+   *
+   * Scheitert das, wird der Lauf nicht abgebrochen: Die Anmeldung laesst sich
+   * trotzdem pruefen, und der Fehlschlag ist mit Screenshot und Seitenbericht
+   * im Protokoll dokumentiert. Ein Bestelllauf ohne Markt findet schlicht
+   * keine Artikel und endet sauber als "Aktion noetig".
+   */
   private async ensureMarket(ctx: DriverContext): Promise<void> {
     const { page } = requireBrowser(ctx);
     if (!ctx.shop.postalCode) {
@@ -109,14 +130,33 @@ export class ReweDriver implements ShopDriver {
     }
 
     ctx.log.info(`Setze Liefergebiet auf PLZ ${ctx.shop.postalCode}.`);
-    await page.goto(url(REWE.paths.marketSelection), { waitUntil: 'domcontentloaded' });
-    await dismissConsentBanner(page, [...REWE.selectors.consent]);
 
-    const input = await firstVisible(page, [...REWE.selectors.postalCodeInput], 8000);
+    // Mehrere Einstiege probieren – REWE hat die Marktwahl schon mehrfach
+    // verschoben.
+    let input: string | null = null;
+    for (const path of [REWE.paths.marketSelection, REWE.paths.home]) {
+      await page.goto(url(path), { waitUntil: 'domcontentloaded' }).catch(() => undefined);
+      await dismissConsentBanner(page, [...REWE.selectors.consent]);
+      input = await findPostalCodeInput(page, [...REWE.selectors.postalCodeInput]);
+      if (input) {
+        ctx.log.debug(`Eingabefeld gefunden auf ${path} (${input}).`);
+        break;
+      }
+    }
+
     if (!input) {
       await ctx.capture('marktwahl-ohne-eingabefeld');
-      throw new Error('Marktwahl: Eingabefeld fuer die Postleitzahl nicht gefunden.');
+      const report = await describePage(page).catch(() => null);
+      if (report) {
+        ctx.log.warn(`Seite "${report.title}" (${report.url}) – gefundene Eingabefelder:`, report.inputs);
+      }
+      ctx.log.error(
+        'Marktwahl: Eingabefeld fuer die Postleitzahl nicht gefunden. ' +
+          'Seitenaufbau mit "npm run shop:inspect" pruefen (siehe docs/shops.md).',
+      );
+      return;
     }
+
     await typeLikeHuman(page, input, ctx.shop.postalCode);
     await page.keyboard.press('Enter');
     await page.waitForLoadState('networkidle').catch(() => undefined);
@@ -125,6 +165,7 @@ export class ReweDriver implements ShopDriver {
     if (service) {
       await page.locator(service).first().click();
       await page.waitForLoadState('networkidle').catch(() => undefined);
+      ctx.log.info('Lieferservice ausgewaehlt.');
     } else {
       ctx.log.warn('Kein Lieferservice-Button gefunden – bitte Marktwahl pruefen.');
       await ctx.capture('marktwahl-ohne-lieferservice');

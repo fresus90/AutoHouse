@@ -61,6 +61,23 @@ Alle veränderlichen Werte stehen ganz oben im jeweiligen Treiber als `REWE`
 bzw. `DM`. Diese Werte sind **nicht offiziell dokumentiert** und können sich
 jederzeit ändern. So zieht man sie nach:
 
+**Der schnellste Weg: den Shop von AutoHouse selbst beschreiben lassen.**
+
+```bash
+npm run shop:inspect -- --shop <shop-id> --url /marktwahl
+# im Container:
+docker compose exec app node dist/cli/shop-inspect.js --shop <shop-id> --url /marktwahl
+```
+
+Das öffnet die Seite mit der gespeicherten Session, bestätigt den
+Cookie-Banner und listet auf, welche Eingabefelder und Schaltflächen dort
+tatsächlich stehen – mit `id`, `name`, `placeholder`, `aria-label` und
+`data-testid`. Screenshot und HTML landen zusätzlich unter
+`data/runs/diagnose/`. Aus dieser Liste lässt sich der passende Selektor
+direkt ablesen und oben im Treiber eintragen.
+
+Für Endpunkte (die im Bericht nicht auftauchen) weiterhin von Hand:
+
 1. Shop im normalen Browser öffnen, Entwicklerwerkzeuge → **Netzwerk**, Filter
    auf `Fetch/XHR`.
 2. Die Aktion ausführen, die im Treiber nachgebaut wird (suchen, in den
@@ -90,7 +107,8 @@ unter `data/runs/<lauf-id>/` ab; in der Oberfläche stehen die Screenshots unter
 
 | Meldung | Bedeutung | Abhilfe |
 | --- | --- | --- |
-| `Login-Formular nicht gefunden` | Selektoren veraltet | Abschnitt 3 |
+| `Login-Formular nicht gefunden` | Selektoren veraltet | Abschnitt 3, am schnellsten mit `shop:inspect` |
+| `Eingabefeld fuer die Postleitzahl nicht gefunden` | REWE hat die Marktwahl umgebaut | `shop:inspect --url /marktwahl`, Selektor in `REWE.selectors.postalCodeInput` ergänzen |
 | `… zeigt ein Captcha` | Bot-Erkennung beim Login | `npm run shop:login -- --shop …` |
 | `Produktsuche über die API nicht möglich (Status 403)` | Endpunkt geändert oder blockiert | Abschnitt 3; der DOM-Weg greift automatisch |
 | `Bestellbutton im Checkout nicht gefunden` | Checkout umgebaut | Selektor `placeOrderButton` prüfen |

@@ -244,6 +244,9 @@ npm run shop:login -- --shop shop_abc123 --headless   # mit gespeicherten Zugang
 npm run plan:run -- --list
 npm run plan:run -- --plan plan_xyz789
 
+# Nachsehen, wie eine Shop-Seite heute aufgebaut ist (Selektoren pflegen)
+npm run shop:inspect -- --shop shop_abc123 --url /marktwahl
+
 # Angemeldete Shop-Session zwischen zwei Installationen umziehen
 # (z. B. vom Laptop auf einen Server ohne Bildschirm)
 npm run shop:session -- --export shop_abc123 --out session.json

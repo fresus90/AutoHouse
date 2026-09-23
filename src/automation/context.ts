@@ -66,11 +66,18 @@ export async function withDriverContext<T>(
     },
     dryRun: options.dryRun ?? true,
     async capture(label: string) {
-      if (!session || !runId) return;
-      const artifacts = await captureArtifacts(session.page, runId, label);
-      addRunArtifact(runId, 'screenshot', artifacts.screenshot, label);
-      addRunArtifact(runId, 'html', artifacts.html, label);
-      log.debug(`Screenshot abgelegt: ${label}`);
+      if (!session) return;
+      // Auch ohne Lauf wird abgelegt – ein Verbindungstest, der schiefgeht,
+      // soll Spuren hinterlassen statt nur eine Meldung.
+      const folder = runId ?? 'diagnose';
+      const artifacts = await captureArtifacts(session.page, folder, label);
+      if (runId) {
+        addRunArtifact(runId, 'screenshot', artifacts.screenshot, label);
+        addRunArtifact(runId, 'html', artifacts.html, label);
+        log.debug(`Screenshot abgelegt: ${label}`);
+      } else {
+        log.warn(`Seitenzustand gesichert: ${artifacts.html}`);
+      }
     },
     async persistSession() {
       if (!session) return;
