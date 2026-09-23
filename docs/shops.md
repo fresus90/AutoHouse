@@ -13,7 +13,7 @@ Ein Treiber implementiert `ShopDriver` aus `src/automation/types.ts`:
 | --- | --- |
 | `prepare` | Seite öffnen, Cookie-Banner, Marktwahl/PLZ |
 | `isLoggedIn` | prüft schnell, ob die mitgebrachte Session gilt |
-| `login` | meldet mit Zugangsdaten an, meldet Captcha als `needsManualAction` |
+| `login` | ruft `performLogin` aus `src/automation/login.ts` mit den Adressen des Shops auf |
 | `searchProducts` | Suchbegriff → Trefferliste mit Artikelnummer und Preis |
 | `getProduct` | Artikelnummer → Produkt |
 | `clearCart` | Warenkorb leeren |
@@ -54,6 +54,25 @@ fällt der Treiber automatisch auf den DOM-Weg zurück; beide Wege sind in
 `rewe.driver.ts` und `dm.driver.ts` implementiert.
 
 ---
+
+## 2b. Was ohne Selektoren auskommt
+
+Zwei Stellen suchen ihre Felder inzwischen selbst und brauchen keine gepflegten
+Selektoren mehr:
+
+- **Postleitzahl** (`findPostalCodeInput`): probiert die bekannten Selektoren,
+  dann Beschriftung, Platzhalter, `aria-label`, umschließendes Label und
+  schließlich „fünfstellig und numerisch".
+- **Anmeldemaske** (`findLoginFields`): Anker ist `input[type="password"]` –
+  das überlebt Umbauten deutlich besser als Klassennamen, weil Browser und
+  Passwortmanager darauf angewiesen sind. Das Benutzerfeld ist das letzte
+  Textfeld davor, die Schaltfläche der Absende-Knopf desselben Formulars.
+  Fehlt das Passwortfeld, gilt die Anmeldung als **mehrstufig**: Erst wird die
+  E-Mail abgeschickt, dann wird erneut gesucht.
+
+Steckt die Anmeldung in einem eingebetteten Rahmen (ausgelagerter
+Anmeldedienst), meldet der Treiber das samt Adresse und verweist auf den
+Login-Assistenten, statt ins Leere zu laufen.
 
 ## 3. Endpunkte und Selektoren prüfen
 

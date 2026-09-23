@@ -8,7 +8,8 @@ import {
   type ProductCandidate,
   type ShopDriver,
 } from '../types.js';
-import { dismissConsentBanner, firstVisible, parsePriceToCents, typeLikeHuman } from '../util.js';
+import { dismissConsentBanner, firstVisible, parsePriceToCents } from '../util.js';
+import { performLogin } from '../login.js';
 
 /**
  * dm Onlineshop (dm.de)
@@ -25,6 +26,7 @@ export const DM = {
   paths: {
     home: '/',
     login: '/login',
+    loginAlternatives: ['/anmelden', '/mein-dm'],
     cart: '/shop/warenkorb',
     checkout: '/shop/kasse',
   },
@@ -79,45 +81,14 @@ export class DmDriver implements ShopDriver {
   }
 
   async login(ctx: DriverContext, credentials: ShopCredentials): Promise<LoginResult> {
-    const { page } = requireBrowser(ctx);
     ctx.log.info('Melde bei dm an.');
-    await page.goto(url(DM.paths.login), { waitUntil: 'domcontentloaded' });
-    await dismissConsentBanner(page, [...DM.selectors.consent]);
-
-    if (await firstVisible(page, [...DM.selectors.captcha], 1500)) {
-      await ctx.capture('dm-captcha');
-      return {
-        ok: false,
-        needsManualAction: true,
-        message:
-          'dm zeigt ein Captcha. Bitte einmalig ueber "npm run shop:login" im sichtbaren Browser anmelden.',
-      };
-    }
-
-    const emailSel = await firstVisible(page, [...DM.selectors.loginEmail], 8000);
-    const passSel = await firstVisible(page, [...DM.selectors.loginPassword], 8000);
-    if (!emailSel || !passSel) {
-      await ctx.capture('dm-login-formular');
-      return { ok: false, message: 'Login-Formular nicht gefunden (Selektoren pruefen).' };
-    }
-
-    await typeLikeHuman(page, emailSel, credentials.username);
-    await typeLikeHuman(page, passSel, credentials.password);
-    const submit = await firstVisible(page, [...DM.selectors.loginSubmit], 4000);
-    if (submit) await page.locator(submit).first().click();
-    await page.waitForLoadState('networkidle').catch(() => undefined);
-
-    if (await this.isLoggedIn(ctx)) {
-      await ctx.persistSession();
-      ctx.log.info('Anmeldung erfolgreich.');
-      return { ok: true };
-    }
-    const errorSel = await firstVisible(page, [...DM.selectors.loginError], 2000);
-    const message = errorSel
-      ? ((await page.locator(errorSel).first().textContent()) ?? '').trim()
-      : 'Anmeldung fehlgeschlagen.';
-    await ctx.capture('dm-login-fehlgeschlagen');
-    return { ok: false, message: message || 'Anmeldung fehlgeschlagen.' };
+    return performLogin(ctx, credentials, {
+      urls: [DM.paths.login, ...DM.paths.loginAlternatives].map(url),
+      consent: [...DM.selectors.consent],
+      captcha: [...DM.selectors.captcha],
+      isLoggedIn: () => this.isLoggedIn(ctx),
+      shopLabel: 'dm',
+    });
   }
 
   async searchProducts(ctx: DriverContext, query: string, limit = 20): Promise<ProductCandidate[]> {

@@ -231,3 +231,114 @@ export async function describePage(page: Page, limit = 25): Promise<PageReport> 
 
   return { url: page.url(), title: collected.title, inputs: collected.inputs, buttons: collected.buttons };
 }
+
+export interface LoginFields {
+  /** Selektor des Benutzer-/E-Mail-Feldes. */
+  user: string | null;
+  /** Selektor des Passwortfeldes; null bei mehrstufigen Anmeldungen. */
+  password: string | null;
+  /** Selektor der Absende-Schaltflaeche. */
+  submit: string | null;
+}
+
+/**
+ * Sucht die Felder einer Anmeldemaske.
+ *
+ * Anker ist `input[type="password"]` – das ueberlebt Umbauten deutlich besser
+ * als Klassennamen oder data-Attribute, weil Browser und Passwortmanager
+ * darauf angewiesen sind. Das Benutzerfeld ist das letzte Textfeld davor, die
+ * Schaltflaeche der Absende-Knopf desselben Formulars.
+ *
+ * Fehlt das Passwortfeld, ist die Anmeldung meist zweistufig (erst E-Mail,
+ * dann Passwort). Dann kommt `password: null` zurueck und der Aufrufer
+ * schickt zuerst die E-Mail ab.
+ */
+export async function findLoginFields(page: Page): Promise<LoginFields> {
+  const found = await page
+    .evaluate(() => {
+      const mark = (element: Element | null | undefined, name: string): string | null => {
+        if (!element) return null;
+        element.setAttribute(`data-autohouse-${name}`, '1');
+        return `[data-autohouse-${name}="1"]`;
+      };
+      const isVisible = (element: Element): boolean => {
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return (
+          rect.width > 20 &&
+          rect.height > 8 &&
+          style.visibility !== 'hidden' &&
+          style.display !== 'none'
+        );
+      };
+
+      const all = Array.from(document.querySelectorAll('input'));
+      const password = all.find((input) => input.type === 'password' && isVisible(input));
+
+      const textLike = all.filter(
+        (input) => ['email', 'text', 'tel'].includes(input.type) && isVisible(input),
+      );
+      const userHints = /(mail|user|login|benutzer|kunde)/i;
+      const describe = (input: HTMLInputElement): string =>
+        [
+          input.name,
+          input.id,
+          input.placeholder,
+          input.type,
+          input.autocomplete,
+          input.getAttribute('aria-label') ?? '',
+          input.labels?.[0]?.textContent ?? '',
+        ].join(' ');
+
+      // Bevorzugt das Textfeld unmittelbar vor dem Passwortfeld.
+      let user: HTMLInputElement | undefined;
+      if (password) {
+        const before = textLike.filter(
+          (input) =>
+            input.compareDocumentPosition(password) & Node.DOCUMENT_POSITION_FOLLOWING,
+        );
+        user = before.at(-1);
+      }
+      user ??= textLike.find((input) => input.type === 'email');
+      user ??= textLike.find((input) => userHints.test(describe(input)));
+      user ??= textLike[0];
+
+      const form = (password ?? user)?.closest('form');
+      const submitTexts = /(anmelden|einloggen|login|weiter|fortfahren|continue)/i;
+      const candidates = Array.from(
+        (form ?? document).querySelectorAll('button, input[type="submit"]'),
+      ).filter(isVisible);
+      const submit =
+        candidates.find((element) => element.getAttribute('type') === 'submit') ??
+        candidates.find((element) => submitTexts.test(element.textContent ?? '')) ??
+        candidates.find((element) => submitTexts.test(element.getAttribute('value') ?? '')) ??
+        candidates[0];
+
+      return {
+        user: mark(user, 'user'),
+        password: mark(password, 'pass'),
+        submit: mark(submit, 'submit'),
+      };
+    })
+    .catch(() => ({ user: null, password: null, submit: null }));
+
+  return found;
+}
+
+/**
+ * Prueft, ob ein Passwortfeld in einem eingebetteten Rahmen steckt – das
+ * kommt bei ausgelagerten Anmeldediensten vor und erklaert, warum auf der
+ * Hauptseite nichts zu finden ist.
+ */
+export async function findLoginIframe(page: Page): Promise<string | null> {
+  for (const frame of page.frames()) {
+    if (frame === page.mainFrame()) continue;
+    const hasPassword = await frame
+      .locator('input[type="password"]')
+      .first()
+      .isVisible({ timeout: 500 })
+      .catch(() => false);
+    if (hasPassword) return frame.url();
+  }
+  return null;
+}

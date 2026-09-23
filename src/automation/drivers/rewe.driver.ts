@@ -17,6 +17,7 @@ import {
   parsePriceToCents,
   typeLikeHuman,
 } from '../util.js';
+import { performLogin } from '../login.js';
 
 /**
  * REWE Lieferservice (shop.rewe.de)
@@ -35,6 +36,7 @@ export const REWE = {
   paths: {
     home: '/',
     login: '/mydata/login',
+    loginAlternatives: ['/login', '/anmelden'],
     marketSelection: '/marktwahl',
     cart: '/checkout/cart',
     checkout: '/checkout',
@@ -181,46 +183,14 @@ export class ReweDriver implements ShopDriver {
   }
 
   async login(ctx: DriverContext, credentials: ShopCredentials): Promise<LoginResult> {
-    const { page } = requireBrowser(ctx);
     ctx.log.info('Melde bei REWE an.');
-    await page.goto(url(REWE.paths.login), { waitUntil: 'domcontentloaded' });
-    await dismissConsentBanner(page, [...REWE.selectors.consent]);
-
-    if (await firstVisible(page, [...REWE.selectors.captcha], 1500)) {
-      await ctx.capture('rewe-captcha');
-      return {
-        ok: false,
-        needsManualAction: true,
-        message:
-          'REWE zeigt ein Captcha. Bitte einmalig ueber "npm run shop:login" im sichtbaren Browser anmelden.',
-      };
-    }
-
-    const emailSel = await firstVisible(page, [...REWE.selectors.loginEmail], 8000);
-    const passSel = await firstVisible(page, [...REWE.selectors.loginPassword], 8000);
-    if (!emailSel || !passSel) {
-      await ctx.capture('rewe-login-formular');
-      return { ok: false, message: 'Login-Formular nicht gefunden (Selektoren pruefen).' };
-    }
-
-    await typeLikeHuman(page, emailSel, credentials.username);
-    await typeLikeHuman(page, passSel, credentials.password);
-    const submit = await firstVisible(page, [...REWE.selectors.loginSubmit], 4000);
-    if (submit) await page.locator(submit).first().click();
-    await page.waitForLoadState('networkidle').catch(() => undefined);
-
-    if (await this.isLoggedIn(ctx)) {
-      await ctx.persistSession();
-      ctx.log.info('Anmeldung erfolgreich.');
-      return { ok: true };
-    }
-
-    const errorSel = await firstVisible(page, [...REWE.selectors.loginError], 2000);
-    const message = errorSel
-      ? ((await page.locator(errorSel).first().textContent()) ?? '').trim()
-      : 'Anmeldung fehlgeschlagen.';
-    await ctx.capture('rewe-login-fehlgeschlagen');
-    return { ok: false, message: message || 'Anmeldung fehlgeschlagen.' };
+    return performLogin(ctx, credentials, {
+      urls: [REWE.paths.login, ...REWE.paths.loginAlternatives].map(url),
+      consent: [...REWE.selectors.consent],
+      captcha: [...REWE.selectors.captcha],
+      isLoggedIn: () => this.isLoggedIn(ctx),
+      shopLabel: 'REWE',
+    });
   }
 
   async searchProducts(ctx: DriverContext, query: string, limit = 20): Promise<ProductCandidate[]> {
