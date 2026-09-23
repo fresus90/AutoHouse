@@ -169,21 +169,33 @@ ihr JavaScript durchgelaufen ist. Erst wenn sie stehen bleibt, meldet der Lauf
 
 Bleibt sie stehen, liegt es fast immer an der **Herkunft der Anfrage**:
 Adressen aus Rechenzentren (Hetzner, Netcup, AWS …) werden deutlich strenger
-behandelt als private Anschlüsse. Zwei Wege, die tatsächlich helfen:
+behandelt als private Anschlüsse.
 
-1. **Session von einem privaten Anschluss übertragen.** Einmal zuhause über
-   den Login-Assistenten anmelden, die Session exportieren und auf dem Server
-   importieren – siehe
-   [docs/hosting.md, Abschnitt 8](hosting.md#8-shops-verbinden--auch-ohne-bildschirm).
-   Die Prüfung legt ihre Freigabe in Cookies ab, die mitwandern. Ob das hält,
-   hängt davon ab, wie streng der Shop die Freigabe an die IP-Adresse bindet.
-2. **AutoHouse zuhause betreiben** statt im Rechenzentrum: Raspberry Pi,
-   Mini-PC oder NAS. Dann kommen die Anfragen von einem gewöhnlichen
-   Privatanschluss. Der Cloudflare-Tunnel funktioniert unverändert, die
-   Anleitung bleibt dieselbe – und der Server kostet nichts mehr.
+### REWE: Cloudflare Turnstile
 
-Beides sind keine Umgehungen der Prüfung, sondern schlicht die Entscheidung,
-von wo aus bestellt wird.
+Bei `shop.rewe.de` ist der Fall konkret. Von einem Server im Rechenzentrum
+kommt statt der Seite eine Prüfung mit dem Titel „Nur einen Moment…" und einem
+eingebetteten Rahmen von `challenges.cloudflare.com/…/turnstile/…`. Der
+Seitenbericht zeigt dann null Eingabefelder und null Schaltflächen.
+
+Das ist **kein Selektorproblem** und lässt sich auch nicht durch Warten lösen.
+Wichtig für die Planung:
+
+- Die Freigabe landet im Cookie **`cf_clearance`**, und das ist **an die
+  IP-Adresse gebunden**. Eine Session, die von einem anderen Anschluss
+  übertragen wurde, hilft hier also **nicht** – anders als bei einfacheren
+  Prüfungen. Abschnitt 8 der Hosting-Anleitung ist für diesen Fall der
+  falsche Weg.
+- Realistisch bleibt, AutoHouse **von einem privaten Anschluss** aus zu
+  betreiben: Raspberry Pi, Mini-PC oder NAS mit Docker. Dann kommen die
+  Anfragen von einer gewöhnlichen Privatadresse. Der Cloudflare-Tunnel
+  funktioniert unverändert, die Anleitung bleibt dieselbe – und der Server
+  kostet nichts mehr. Eine Garantie ist auch das nicht: Ein headless
+  gestarteter Browser bleibt erkennbar.
+
+Was AutoHouse dafür **nicht** tut: Turnstile lösen oder umgehen, IP-Adressen
+rotieren, Fingerabdrücke fälschen. Erkennt der Shop die Automatisierung, endet
+der Lauf mit einer verständlichen Meldung – und ein Mensch entscheidet.
 
 ---
 

@@ -122,7 +122,8 @@ type Variante =
   | 'overlay'
   | 'gesperrt'
   | 'pruefseite-loest-sich'
-  | 'pruefseite-bleibt';
+  | 'pruefseite-bleibt'
+  | 'turnstile';
 
 function fakeShop(variante: Variante): http.Server {
   return http.createServer((req, res) => {
@@ -185,6 +186,11 @@ function fakeShop(variante: Variante): http.Server {
       } else if (variante === 'pruefseite-bleibt') {
         res.end(`<html><head><title>Nur einen Moment...</title></head>
           <body><p>Wir pruefen Ihre Verbindung</p></body></html>`);
+      } else if (variante === 'turnstile') {
+        // Wie bei REWE beobachtet: leere Seite plus Turnstile-Rahmen.
+        res.end(`<html><head><title>Nur einen Moment…</title></head><body>
+          <iframe src="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g/turnstile/f/av0/rch/abc/0x4AAA/light/fbE/new/normal?lang=auto"></iframe>
+          </body></html>`);
       } else if (variante === 'gesperrt') {
         res.end('<html><head><title>Access Denied</title></head><body><p>Zugriff verweigert</p></body></html>');
       } else {
@@ -265,17 +271,31 @@ test('bleibende Pruefseite wird als Bot-Pruefung gemeldet', async (t) => {
   if (!chromium) return t.skip('Chromium fehlt.');
   const result = await runLogin('pruefseite-bleibt');
   assert.equal(result.ok, false);
-  assert.match(result.message ?? '', /Bot-Pruefung/, 'als Bot-Pruefung benannt');
+  assert.match(result.message ?? '', /Bot-Erkennung/, 'als Pruefung der Bot-Erkennung benannt');
   assert.match(result.message ?? '', /Nur einen Moment/, 'die Beschriftung steht in der Meldung');
   assert.match(result.message ?? '', /127\.0\.0\.1/, 'die Adresse steht in der Meldung');
   assert.match(result.message ?? '', /Session/, 'nennt den Ausweg ueber die uebertragene Session');
+});
+
+test('Cloudflare Turnstile wird benannt und die IP-Bindung erklaert', async (t) => {
+  if (!chromium) return t.skip('Chromium fehlt.');
+  const result = await runLogin('turnstile');
+  assert.equal(result.ok, false);
+  assert.match(result.message ?? '', /Cloudflare Turnstile/);
+  assert.match(result.message ?? '', /cf_clearance/, 'nennt das Freigabe-Cookie');
+  assert.match(result.message ?? '', /IP-Adresse gebunden/, 'erklaert, warum eine uebertragene Session nicht hilft');
+  assert.doesNotMatch(
+    result.message ?? '',
+    /Abschnitt 8/,
+    'empfiehlt hier gerade nicht die Session-Uebertragung',
+  );
 });
 
 test('Sperrseite wird als Bot-Pruefung erkannt und nennt Titel und Adresse', async (t) => {
   if (!chromium) return t.skip('Chromium fehlt.');
   const result = await runLogin('gesperrt');
   assert.equal(result.ok, false);
-  assert.match(result.message ?? '', /Bot-Pruefung/);
+  assert.match(result.message ?? '', /Bot-Erkennung/);
   assert.match(result.message ?? '', /Access Denied/, 'der Seitentitel steht in der Meldung');
   assert.match(result.message ?? '', /127\.0\.0\.1/, 'die tatsaechliche Adresse steht in der Meldung');
 });

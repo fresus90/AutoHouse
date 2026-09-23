@@ -15,6 +15,7 @@ import {
   findPostalCodeInput,
   firstVisible,
   parsePriceToCents,
+  explainBotChallenge,
   typeLikeHuman,
   waitOutBotChallenge,
 } from '../util.js';
@@ -104,11 +105,8 @@ export class ReweDriver implements ShopDriver {
     await page.goto(url(REWE.paths.home), { waitUntil: 'domcontentloaded' });
 
     const challenge = await waitOutBotChallenge(page);
-    if (!challenge.passed) {
-      ctx.log.error(
-        `REWE zeigt eine Pruefseite der Bot-Erkennung ("${challenge.label}"). ` +
-          'Siehe docs/shops.md, Abschnitt "Bot-Erkennung".',
-      );
+    if (!challenge.passed && challenge.challenge) {
+      ctx.log.error(explainBotChallenge(challenge.challenge, page.url(), 'REWE'));
       await ctx.capture('bot-pruefung-startseite');
       return;
     }

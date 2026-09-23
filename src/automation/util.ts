@@ -388,28 +388,49 @@ export async function waitForLoginForm(page: Page, timeoutMs = 10_000): Promise<
     .catch(() => false);
 }
 
+/** Ergebnis der Pruefseiten-Erkennung. */
+export interface BotChallenge {
+  /** Beschriftung der Seite, z. B. "Nur einen Moment…". */
+  label: string;
+  /** Erkannter Anbieter, wenn eindeutig. */
+  vendor: 'cloudflare' | null;
+}
+
 /**
  * Erkennt eine vorgeschaltete Pruefseite der Bot-Erkennung.
  *
- * Solche Zwischenseiten ("Nur einen Moment…", "Checking your browser") tragen
- * kaum Inhalt und leiten nach einer JavaScript-Pruefung weiter – oder eben
- * nicht, etwa bei Adressen aus Rechenzentren. Gibt die erkannte Beschriftung
- * zurueck, sonst null.
+ * Zuverlaessiger als die Beschriftung ist der eingebundene Pruefdienst: Ein
+ * Rahmen von challenges.cloudflare.com oder ein Skript unter
+ * /cdn-cgi/challenge-platform/ benennt den Anbieter eindeutig. Zusaetzlich
+ * werden die gaengigen Titel erkannt ("Nur einen Moment…", "Just a moment").
  */
-export async function detectBotChallenge(page: Page): Promise<string | null> {
+export async function detectBotChallenge(page: Page): Promise<BotChallenge | null> {
   const marker =
     /(nur einen moment|einen augenblick|just a moment|checking your browser|attention required|access denied|zugriff verweigert|bitte best[äa]tigen sie|verify you are human|sind sie ein mensch)/i;
 
   const found = await page
-    .evaluate(() => ({
-      title: document.title ?? '',
-      text: (document.body?.innerText ?? '').slice(0, 400),
-    }))
+    .evaluate(() => {
+      const srcs = Array.from(document.querySelectorAll('iframe[src], script[src]')).map(
+        (element) => element.getAttribute('src') ?? '',
+      );
+      return {
+        title: document.title ?? '',
+        text: (document.body?.innerText ?? '').slice(0, 400),
+        cloudflare: srcs.some((src) =>
+          /challenges\.cloudflare\.com|\/cdn-cgi\/challenge-platform\/|turnstile/i.test(src),
+        ),
+      };
+    })
     .catch(() => null);
   if (!found) return null;
 
-  if (marker.test(found.title)) return found.title.trim();
-  if (marker.test(found.text)) return found.title.trim() || found.text.split('\n')[0]!.trim();
+  const label =
+    found.title.trim() ||
+    (marker.test(found.text) ? found.text.split('\n')[0]!.trim() : '') ||
+    'Pruefseite';
+
+  if (found.cloudflare) return { label, vendor: 'cloudflare' };
+  if (marker.test(found.title) || marker.test(found.text)) return { label, vendor: null };
 
   // Bewusst keine Faustregel ueber "die Seite wirkt leer": Eine Maske, die
   // sich erst auf Knopfdruck oeffnet, sieht genauso aus.
@@ -427,15 +448,36 @@ export async function detectBotChallenge(page: Page): Promise<string | null> {
 export async function waitOutBotChallenge(
   page: Page,
   timeoutMs = 30_000,
-): Promise<{ passed: boolean; label: string | null }> {
-  const label = await detectBotChallenge(page);
-  if (!label) return { passed: true, label: null };
+): Promise<{ passed: boolean; challenge: BotChallenge | null }> {
+  const challenge = await detectBotChallenge(page);
+  if (!challenge) return { passed: true, challenge: null };
 
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await page.waitForTimeout(1500);
     const still = await detectBotChallenge(page);
-    if (!still) return { passed: true, label };
+    if (!still) return { passed: true, challenge };
   }
-  return { passed: false, label };
+  return { passed: false, challenge };
+}
+
+/** Erklaert verstaendlich, was eine stehengebliebene Pruefseite bedeutet. */
+export function explainBotChallenge(challenge: BotChallenge, url: string, shopLabel: string): string {
+  const head = `${shopLabel} liefert die Seite nicht aus, sondern eine Pruefung der Bot-Erkennung ("${challenge.label}", ${url}).`;
+
+  if (challenge.vendor === 'cloudflare') {
+    return (
+      `${head} Es handelt sich um Cloudflare Turnstile. ` +
+      'Die Freigabe wird im Cookie cf_clearance abgelegt und ist an die IP-Adresse gebunden – ' +
+      'eine von einem anderen Anschluss uebertragene Session hilft hier also nicht. ' +
+      'Server-Adressen aus Rechenzentren werden praktisch immer geprueft. ' +
+      'Realistisch bleibt, AutoHouse von einem privaten Anschluss aus zu betreiben ' +
+      '(siehe docs/shops.md, Abschnitt "Bot-Erkennung").'
+    );
+  }
+  return (
+    `${head} Das ist keine Frage der Selektoren: Adressen aus Rechenzentren werden dabei ` +
+    'haeufig abgewiesen. Abhilfe: einmal von einem privaten Anschluss anmelden und die ' +
+    'Session uebertragen (docs/hosting.md, Abschnitt 8) oder AutoHouse zuhause betreiben.'
+  );
 }

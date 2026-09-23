@@ -382,12 +382,15 @@ Ehrlich gesagt, damit es keine Überraschungen gibt:
   angepasst werden; wie man das prüft, steht in [docs/shops.md](docs/shops.md).
   Die zugehörigen Werte wurden nicht gegen die Live-Seiten verifiziert – der
   erste echte Lauf gehört deshalb als Testlauf gefahren.
-- **Bot-Erkennung.** Beide Shops setzen Schutzmechanismen ein. Der Browser
-  läuft mit deutschem Gebietsschema, realistischem User-Agent und ohne das
-  offensichtlichste Automatisierungs-Merkmal, tippt mit Pausen und nutzt
-  gespeicherte Sessions statt ständiger Logins. Eine Garantie ist das nicht;
-  bei einem Captcha meldet der Lauf sauber *Aktion nötig*, statt blind
-  weiterzumachen.
+- **Bot-Erkennung – bei REWE ein harter Blocker.** `shop.rewe.de` steht hinter
+  **Cloudflare Turnstile**. Von einem Server im Rechenzentrum kommt statt der
+  Seite eine Prüfung („Nur einen Moment…"); die Freigabe hängt im Cookie
+  `cf_clearance`, das an die IP-Adresse gebunden ist. Eine von woanders
+  übertragene Session hilft deshalb nicht. Praktikabel ist nur der Betrieb von
+  einem **privaten Anschluss** (Raspberry Pi, Mini-PC, NAS) – und auch das
+  ohne Garantie. AutoHouse erkennt solche Prüfungen, wartet ab, ob sie sich
+  von selbst auflösen, und meldet sonst verständlich, woran es liegt.
+  Umgangen wird nichts.
 - **AGB.** Automatisierte Bestellungen können den Nutzungsbedingungen der Shops
   widersprechen. Der Betrieb erfolgt auf eigene Verantwortung – bitte vorher
   prüfen.
