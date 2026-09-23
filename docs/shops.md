@@ -101,6 +101,22 @@ tatsächlich stehen – mit `id`, `name`, `placeholder`, `aria-label` und
 `data/runs/diagnose/`. Aus dieser Liste lässt sich der passende Selektor
 direkt ablesen und oben im Treiber eintragen.
 
+Zwei Zusätze, die bei modernen Shops fast immer gebraucht werden:
+
+```bash
+# Maske, die erst auf Klick erscheint (Knuspr: <div aria-label="Konto">)
+npm run shop:inspect -- --url https://www.knuspr.de --click "Anmelden"
+
+# Gezielt Produktkacheln samt HTML auflisten
+npm run shop:inspect -- --url "https://www.knuspr.de/suche?q=Vollmilch" \
+  --selector ".product-card"
+```
+
+Welchen Selektor man dort einsetzt, verrät der Abschnitt **„Wiederkehrende
+Blöcke"** im Bericht: Er gruppiert gleich aufgebaute Elemente und zeigt
+Anzahl und Beispieltext. Acht gleiche Blöcke auf einer Suchseite sind so gut
+wie immer die Produktkacheln.
+
 Für Endpunkte (die im Bericht nicht auftauchen) weiterhin von Hand:
 
 1. Shop im normalen Browser öffnen, Entwicklerwerkzeuge → **Netzwerk**, Filter
@@ -230,7 +246,8 @@ docker compose exec app node dist/cli/probe-shops.js
 ```
 
 Geöffnet werden nur Start- und Anmeldeseite – keine Anmeldung, keine
-Bestellung, keine Zugangsdaten. Je Shop kommt eine von vier Einschätzungen:
+Bestellung, keine Zugangsdaten. Masken, die sich erst auf Klick öffnen
+(etwa ein Konto-Symbol im Kopfbereich), werden dabei geöffnet. Je Shop kommt eine von vier Einschätzungen:
 
 | Ergebnis | Bedeutung |
 | --- | --- |

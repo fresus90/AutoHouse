@@ -86,8 +86,20 @@ async function describeField(page: Page, marker: string): Promise<string> {
   return rest ? `${selector}   (${rest})` : selector;
 }
 
+interface ReportOptions {
+  /** Vor dem Bericht dieses Element anklicken (z. B. "Anmelden"). */
+  click?: string | undefined;
+  /** Statt des Ueberblicks gezielt diese Elemente auflisten. */
+  selector?: string | undefined;
+}
+
 /** Der eigentliche Bericht – unabhaengig davon, woher die Seite kommt. */
-async function report(page: Page, target: string, slug: string): Promise<void> {
+async function report(
+  page: Page,
+  target: string,
+  slug: string,
+  options: ReportOptions = {},
+): Promise<void> {
   await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
   const challenge = await waitOutBotChallenge(page, 20_000);
@@ -101,6 +113,42 @@ async function report(page: Page, target: string, slug: string): Promise<void> {
   }
   await page.waitForLoadState('networkidle').catch(() => undefined);
   await page.waitForTimeout(1200);
+
+  // Manche Masken oeffnen sich erst auf Klick – etwa ein Konto-Symbol im Kopf.
+  if (options.click) {
+    const clicked = await page
+      .getByText(options.click, { exact: false })
+      .first()
+      .click({ timeout: 8000 })
+      .then(() => true)
+      .catch(() => false);
+    console.log(
+      clicked
+        ? `"${options.click}" angeklickt.\n`
+        : `"${options.click}" nicht gefunden – Bericht zeigt die Seite unveraendert.\n`,
+    );
+    await page.waitForTimeout(1500);
+  }
+
+  if (options.selector) {
+    const elements = await page
+      .locator(options.selector)
+      .evaluateAll((nodes) =>
+        nodes.slice(0, 15).map((node) => ({
+          tag: node.tagName.toLowerCase(),
+          class: (node.getAttribute('class') ?? '').slice(0, 60),
+          text: (node.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 120),
+          html: node.outerHTML.slice(0, 300),
+        })),
+      )
+      .catch(() => []);
+    console.log(`Treffer fuer "${options.selector}": ${elements.length}\n`);
+    for (const element of elements) {
+      console.log(`   <${element.tag} class="${element.class}">`);
+      console.log(`      Text: ${element.text}`);
+      console.log(`      HTML: ${element.html}\n`);
+    }
+  }
 
   const pageReport = await describePage(page, 30);
   console.log(`Titel:    ${pageReport.title}`);
@@ -125,6 +173,14 @@ async function report(page: Page, target: string, slug: string): Promise<void> {
   table(pageReport.inputs);
   console.log('\nSchaltflaechen und Links:');
   table(pageReport.buttons);
+
+  if (pageReport.repeated.length > 0) {
+    console.log('\nWiederkehrende Bloecke (meist die Produktkacheln):');
+    for (const group of pageReport.repeated) {
+      console.log(`   ${group.count}x  ${group.selector}`);
+      console.log(`        Beispiel: ${group.sample}`);
+    }
+  }
 
   const frames = page.frames().filter((frame) => frame !== page.mainFrame());
   if (frames.length > 0) {
@@ -153,7 +209,10 @@ function usage(): void {
       '  npm run shop:inspect -- --url https://www.beispiel.de/anmelden\n' +
       '  npm run shop:inspect -- --shop <shop-id> --url /marktwahl\n\n' +
       'Ohne --shop wird ohne gespeicherte Anmeldung geoeffnet; das genuegt fuer\n' +
-      'oeffentliche Seiten wie Anmeldemasken und Produktsuchen.',
+      'oeffentliche Seiten wie Anmeldemasken und Produktsuchen.\n\n' +
+      'Zusaetzlich:\n' +
+      '  --click "Anmelden"      oeffnet eine Maske, die erst auf Klick erscheint\n' +
+      '  --selector "<css>"      listet gezielt diese Elemente samt HTML auf',
   );
 }
 
@@ -184,7 +243,10 @@ async function main(): Promise<void> {
     console.log(`Oeffne ${raw} (ohne gespeicherte Anmeldung) …\n`);
     const session = await createSession({});
     try {
-      await report(session.page, raw, slug);
+      await report(session.page, raw, slug, {
+        click: args.get('click'),
+        selector: args.get('selector'),
+      });
     } catch (error) {
       console.error(`Fehler: ${errorMessage(error)}`);
     } finally {
@@ -210,7 +272,10 @@ async function main(): Promise<void> {
 
   await withDriverContext({ shop, dryRun: true }, async (_driver, ctx) => {
     const { page } = requireBrowser(ctx);
-    await report(page, target, shop.provider);
+    await report(page, target, shop.provider, {
+      click: args.get('click'),
+      selector: args.get('selector'),
+    });
   }).catch((error: unknown) => {
     console.error(`Fehler: ${errorMessage(error)}`);
   });

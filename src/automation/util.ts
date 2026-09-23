@@ -206,6 +206,8 @@ export interface PageReport {
   title: string;
   inputs: Array<Record<string, string>>;
   buttons: Array<Record<string, string>>;
+  /** Mehrfach gleich aufgebaute Bloecke – meist die Produktkacheln. */
+  repeated: Array<{ selector: string; count: number; sample: string }>;
 }
 
 export async function describePage(page: Page, limit = 25): Promise<PageReport> {
@@ -247,10 +249,41 @@ export async function describePage(page: Page, limit = 25): Promise<PageReport> 
       .filter((entry) => entry['text'] || entry['data-testid'])
       .slice(0, max);
 
-    return { title: document.title, inputs, buttons };
+    // Wiederkehrende Bloecke finden: Produktkacheln sehen alle gleich aus.
+    // Gruppiert wird nach Tag plus Klassensignatur; Gruppen ab vier Treffern
+    // sind fast immer eine Liste von Inhalten.
+    const groups = new Map<string, { count: number; sample: string }>();
+    for (const element of Array.from(document.querySelectorAll('*'))) {
+      const classes = (element.getAttribute('class') ?? '').trim();
+      const testId = element.getAttribute('data-testid') ?? '';
+      if (!classes && !testId) continue;
+      if (!visible(element)) continue;
+      const text = clean(element.textContent);
+      if (text.length < 8) continue;
+
+      const key = testId
+        ? `${element.tagName.toLowerCase()}[data-testid="${testId}"]`
+        : `${element.tagName.toLowerCase()}.${classes.split(/\s+/).slice(0, 2).join('.')}`;
+      const entry = groups.get(key);
+      if (entry) entry.count += 1;
+      else groups.set(key, { count: 1, sample: text });
+    }
+    const repeated = Array.from(groups.entries())
+      .filter(([, value]) => value.count >= 4)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 8)
+      .map(([selector, value]) => ({ selector, count: value.count, sample: value.sample }));
+
+    return { title: document.title, inputs, buttons, repeated };
   }, limit);
 
-  return { url: page.url(), title: collected.title, inputs: collected.inputs, buttons: collected.buttons };
+  return {
+    url: page.url(),
+    title: collected.title,
+    inputs: collected.inputs,
+    buttons: collected.buttons,
+    repeated: collected.repeated,
+  };
 }
 
 export interface LoginFields {
@@ -403,6 +436,9 @@ export async function waitForLoginForm(page: Page, timeoutMs = 10_000): Promise<
   if (appeared) return true;
 
   // Zweiter Versuch: Maske per Knopfdruck oeffnen.
+  // Der Ausloeser ist nicht immer ein <button> oder <a>: Knuspr etwa benutzt
+  // ein <div aria-label="Konto">. Deshalb auch nach Rolle, Beschriftung und
+  // schlicht nach dem Text suchen.
   const triggers = [
     'button:has-text("Anmelden")',
     'a:has-text("Anmelden")',
@@ -410,6 +446,11 @@ export async function waitForLoginForm(page: Page, timeoutMs = 10_000): Promise<
     'a:has-text("Einloggen")',
     'button:has-text("Login")',
     '[data-testid*="login" i]',
+    '[aria-label="Konto"]',
+    '[aria-label*="anmelden" i]',
+    '[aria-label*="konto" i]',
+    '[role="button"]:has-text("Anmelden")',
+    'div:has-text("Anmelden"):not(:has(div:has-text("Anmelden")))',
   ];
   const trigger = await firstVisible(page, triggers, 2500);
   if (!trigger) return false;
