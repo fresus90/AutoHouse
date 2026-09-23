@@ -90,6 +90,26 @@ test('Anmeldemaske wird ueber das Passwortfeld gefunden', async (t) => {
   assert.equal(mitSuche, 'kundennummer', 'das Feld direkt vor dem Passwort gewinnt');
 });
 
+test('eine Startseite mit Suchfeld gilt nicht als Anmeldemaske', async (t) => {
+  if (!chromium) return t.skip('Chromium fehlt.');
+  // Nachgebaut nach amazon.de: Suchfeld plus Knopf, aber kein Login.
+  const fields = await onPage(
+    `<header><input type="text" id="twotabsearchtextbox" name="field-keywords">
+     <input type="submit" value="Los"></header><p>Angebote</p>`,
+    (page) => findLoginFields(page as never),
+  );
+  assert.equal(fields.user, null, 'das Suchfeld darf nicht als Benutzerfeld gelten');
+});
+
+test('einzelnes Textfeld neben einem Anmelden-Knopf zaehlt dagegen schon', async (t) => {
+  if (!chromium) return t.skip('Chromium fehlt.');
+  const fields = await onPage(
+    `<form><input type="text" class="zufall"><button type="submit">Weiter</button></form>`,
+    (page) => findLoginFields(page as never),
+  );
+  assert.ok(fields.user, 'mehrstufige Anmeldung ohne sprechende Attribute');
+});
+
 test('mehrstufige Anmeldung wird als solche erkannt', async (t) => {
   if (!chromium) return t.skip('Chromium fehlt.');
   const fields = await onPage(

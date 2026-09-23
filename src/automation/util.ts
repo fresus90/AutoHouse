@@ -294,21 +294,40 @@ export async function findLoginFields(page: Page): Promise<LoginFields> {
           input.labels?.[0]?.textContent ?? '',
         ].join(' ');
 
-      // Bevorzugt das Textfeld unmittelbar vor dem Passwortfeld.
+      const submitTexts = /(anmelden|einloggen|login|weiter|fortfahren|continue)/i;
+      const loginButtonNearby = Array.from(
+        document.querySelectorAll('button, input[type="submit"]'),
+      )
+        .filter(isVisible)
+        .some(
+          (element) =>
+            submitTexts.test(element.textContent ?? '') ||
+            submitTexts.test(element.getAttribute('value') ?? ''),
+        );
+
       let user: HTMLInputElement | undefined;
       if (password) {
+        // Ein Passwortfeld ist starker Beleg fuer eine Anmeldemaske: Dann darf
+        // das letzte Textfeld davor genommen werden.
         const before = textLike.filter(
           (input) =>
             input.compareDocumentPosition(password) & Node.DOCUMENT_POSITION_FOLLOWING,
         );
-        user = before.at(-1);
+        user = before.at(-1) ?? textLike[0];
+      } else {
+        // Ohne Passwortfeld ist Vorsicht geboten: Sonst gilt das Suchfeld
+        // einer Startseite als Anmeldemaske. Es braucht einen echten Hinweis.
+        user =
+          textLike.find((input) => input.type === 'email') ??
+          textLike.find(
+            (input) =>
+              userHints.test(describe(input)) ||
+              ['username', 'email'].includes(input.autocomplete),
+          ) ??
+          (loginButtonNearby && textLike.length === 1 ? textLike[0] : undefined);
       }
-      user ??= textLike.find((input) => input.type === 'email');
-      user ??= textLike.find((input) => userHints.test(describe(input)));
-      user ??= textLike[0];
 
       const form = (password ?? user)?.closest('form');
-      const submitTexts = /(anmelden|einloggen|login|weiter|fortfahren|continue)/i;
       const candidates = Array.from(
         (form ?? document).querySelectorAll('button, input[type="submit"]'),
       ).filter(isVisible);

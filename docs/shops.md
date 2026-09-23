@@ -173,19 +173,27 @@ behandelt als private Anschlüsse.
 
 ### REWE: Cloudflare Turnstile
 
-Bei `shop.rewe.de` ist der Fall konkret. Von einem Server im Rechenzentrum
-kommt statt der Seite eine Prüfung mit dem Titel „Nur einen Moment…" und einem
-eingebetteten Rahmen von `challenges.cloudflare.com/…/turnstile/…`. Der
-Seitenbericht zeigt dann null Eingabefelder und null Schaltflächen.
+Bei `shop.rewe.de` sind zwei verschiedene Fälle zu unterscheiden – das war
+beim ersten Befund noch nicht klar:
 
-Das ist **kein Selektorproblem** und lässt sich auch nicht durch Warten lösen.
-Wichtig für die Planung:
+**a) Prüfseite statt Inhalt.** Manchmal kommt gar keine Seite, sondern eine
+Zwischenseite mit dem Titel „Nur einen Moment…" und einem Rahmen von
+`challenges.cloudflare.com`. Der Seitenbericht zeigt dann null Eingabefelder
+und null Schaltflächen. Die Freigabe landet im Cookie **`cf_clearance`**, das
+**an die IP-Adresse gebunden** ist – eine von einem anderen Anschluss
+übertragene Session hilft dagegen nicht.
 
-- Die Freigabe landet im Cookie **`cf_clearance`**, und das ist **an die
-  IP-Adresse gebunden**. Eine Session, die von einem anderen Anschluss
-  übertragen wurde, hilft hier also **nicht** – anders als bei einfacheren
-  Prüfungen. Abschnitt 8 der Hosting-Anleitung ist für diesen Fall der
-  falsche Weg.
+**b) Turnstile im Anmeldeformular.** Häufiger führt der Weg über die
+Startseite auf den Anmeldedienst `account.rewe.de` (Keycloak, Titel
+„Anmeldung bei REWE"). Die Maske ist dann vorhanden, das Formular aber mit
+einem Turnstile-Widget abgesichert. Hier blockiert nur der **Anmeldevorgang**,
+nicht der Seitenabruf. Eine einmal von Hand erzeugte Anmelde-Session kann
+deshalb durchaus tragen – die Sitzungs-Cookies des Shops sind nicht in
+derselben Weise an die IP gebunden wie `cf_clearance`. Ob es hält, zeigt
+nur der Versuch (Login-Assistent plus `shop:session`, siehe
+[hosting.md, Abschnitt 8](hosting.md#8-shops-verbinden--auch-ohne-bildschirm)).
+
+Für Fall a) gilt weiterhin:
 - Realistisch bleibt, AutoHouse **von einem privaten Anschluss** aus zu
   betreiben: Raspberry Pi, Mini-PC oder NAS mit Docker. Dann kommen die
   Anfragen von einer gewöhnlichen Privatadresse. Der Cloudflare-Tunnel
