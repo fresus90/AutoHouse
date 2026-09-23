@@ -244,6 +244,10 @@ npm run shop:login -- --shop shop_abc123 --headless   # mit gespeicherten Zugang
 npm run plan:run -- --list
 npm run plan:run -- --plan plan_xyz789
 
+# Prüfen, welche Shops einen Server überhaupt heranlassen (ohne Shop-Anlage)
+npm run shops:probe
+npm run shops:probe -- --only knuspr,dm
+
 # Nachsehen, wie eine Shop-Seite heute aufgebaut ist (Selektoren pflegen)
 npm run shop:inspect -- --shop shop_abc123 --url /marktwahl
 

@@ -201,6 +201,40 @@ der Lauf mit einer verständlichen Meldung – und ein Mensch entscheidet.
 
 ## 6. Einen neuen Shop ergänzen
 
+### Zuerst: lohnt sich die Arbeit überhaupt?
+
+Bevor ein Treiber entsteht, klärt eine Messung, ob der Shop einen Server
+überhaupt heranlässt. Dafür muss **kein Shop in AutoHouse angelegt** sein:
+
+```bash
+npm run shops:probe                       # die mitgelieferte Auswahl
+npm run shops:probe -- --only knuspr,dm   # nur bestimmte
+npm run shops:probe -- --url https://www.beispiel.de --login /anmelden
+
+# im Container:
+docker compose exec app node dist/cli/probe-shops.js
+```
+
+Geöffnet werden nur Start- und Anmeldeseite – keine Anmeldung, keine
+Bestellung, keine Zugangsdaten. Je Shop kommt eine von vier Einschätzungen:
+
+| Ergebnis | Bedeutung |
+| --- | --- |
+| `aussichtsreich` | Anmeldemaske ist erreichbar – ein Treiber kann ansetzen |
+| `unklar` | Seite lädt, aber keine Maske gefunden; Screenshot ansehen |
+| `pruefung` | Bot-Erkennung vorgeschaltet (Anbieter wird benannt) |
+| `nicht erreichbar` | Netzwerkfehler oder Zeitüberschreitung |
+
+Screenshots und ein JSON-Bericht je Shop landen unter `data/runs/probe/`.
+
+Wichtig: `aussichtsreich` heißt nur, dass die **Tür offen** ist. Ob Suche,
+Warenkorb und Kasse mitspielen, zeigt erst der Treiber. Und das Ergebnis hängt
+an der **Herkunft der Anfrage** – dieselbe Prüfung fällt von einem
+Privatanschluss oft anders aus als aus dem Rechenzentrum. Am besten dort
+messen, wo AutoHouse später laufen soll.
+
+### Dann den Treiber schreiben
+
 1. `src/automation/drivers/<name>.driver.ts` anlegen und `ShopDriver`
    implementieren. `demo.driver.ts` ist die kürzeste Vorlage,
    `rewe.driver.ts` die vollständigste.
