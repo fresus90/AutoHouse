@@ -16,6 +16,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { closeBrowser, createSession } from '../automation/browser.js';
 import {
+  GENERIC_CONSENT,
   describePage,
   detectBotChallenge,
   dismissConsentBanner,
@@ -60,19 +61,7 @@ const CANDIDATES: Candidate[] = [
 const ERROR_TITLE =
   /(nicht gefunden|not found|404|error|fehler|could not be satisfied|forbidden)/i;
 
-/** Zustimmungsschaltflaechen der gaengigen Consent-Werkzeuge. */
-const CONSENT = [
-  '#uc-btn-accept-banner',
-  'button[data-testid="uc-accept-all-button"]',
-  '#onetrust-accept-btn-handler',
-  '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
-  'button[data-dmid="button-accept-all"]',
-  'button:has-text("Alle akzeptieren")',
-  'button:has-text("Alle Cookies akzeptieren")',
-  'button:has-text("Akzeptieren")',
-  'button:has-text("Einverstanden")',
-  'button:has-text("Zustimmen")',
-];
+const CONSENT = [...GENERIC_CONSENT];
 
 type Verdict =
   | 'aussichtsreich'

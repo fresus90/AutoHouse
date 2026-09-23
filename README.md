@@ -249,7 +249,8 @@ npm run shops:probe
 npm run shops:probe -- --only knuspr,dm
 
 # Nachsehen, wie eine Shop-Seite heute aufgebaut ist (Selektoren pflegen)
-npm run shop:inspect -- --shop shop_abc123 --url /marktwahl
+npm run shop:inspect -- --url https://www.beispiel.de/anmelden
+npm run shop:inspect -- --shop shop_abc123 --url /marktwahl   # hinter dem Login
 
 # Angemeldete Shop-Session zwischen zwei Installationen umziehen
 # (z. B. vom Laptop auf einen Server ohne Bildschirm)

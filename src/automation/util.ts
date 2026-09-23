@@ -42,6 +42,23 @@ export function formatCents(cents: number | null | undefined): string {
 }
 
 /**
+ * Zustimmungsschaltflaechen der gaengigen Consent-Werkzeuge. Dient als
+ * Ausgangspunkt, wenn kein shop-spezifischer Selektor bekannt ist.
+ */
+export const GENERIC_CONSENT = [
+  '#uc-btn-accept-banner',
+  'button[data-testid="uc-accept-all-button"]',
+  '#onetrust-accept-btn-handler',
+  '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+  'button[data-dmid="button-accept-all"]',
+  'button:has-text("Alle akzeptieren")',
+  'button:has-text("Alle Cookies akzeptieren")',
+  'button:has-text("Akzeptieren")',
+  'button:has-text("Einverstanden")',
+  'button:has-text("Zustimmen")',
+] as const;
+
+/**
  * Klickt den ersten passenden Zustimmungs-Button eines Consent-Layers.
  * Bewusst tolerant: fehlt der Banner, ist das kein Fehler.
  */

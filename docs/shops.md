@@ -83,9 +83,15 @@ jederzeit ändern. So zieht man sie nach:
 **Der schnellste Weg: den Shop von AutoHouse selbst beschreiben lassen.**
 
 ```bash
+# Fuer beliebige oeffentliche Seiten – ohne dass ein Shop angelegt sein muss:
+npm run shop:inspect -- --url https://www.knuspr.de/anmeldung
+
+# Mit angelegtem Shop: nutzt dessen gespeicherte Anmeldung und erreicht
+# damit auch Seiten hinter dem Login. Pfadangaben genuegen.
 npm run shop:inspect -- --shop <shop-id> --url /marktwahl
-# im Container:
-docker compose exec app node dist/cli/shop-inspect.js --shop <shop-id> --url /marktwahl
+
+# im Container jeweils:
+docker compose exec app node dist/cli/shop-inspect.js --url https://…
 ```
 
 Das öffnet die Seite mit der gespeicherten Session, bestätigt den
