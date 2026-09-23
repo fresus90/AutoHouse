@@ -46,16 +46,20 @@ export function formatCents(cents: number | null | undefined): string {
  * Bewusst tolerant: fehlt der Banner, ist das kein Fehler.
  */
 export async function dismissConsentBanner(page: Page, selectors: string[]): Promise<boolean> {
-  for (const selector of selectors) {
-    const locator = page.locator(selector).first();
-    try {
-      if (await locator.isVisible({ timeout: 1500 })) {
-        await locator.click({ timeout: 3000 });
-        await page.waitForTimeout(400);
-        return true;
+  // Consent-Werkzeuge rendern haeufig in einem eingebetteten Rahmen, deshalb
+  // werden alle Rahmen der Seite durchgesehen, nicht nur der Hauptrahmen.
+  for (const frame of [page.mainFrame(), ...page.frames()]) {
+    for (const selector of selectors) {
+      const locator = frame.locator(selector).first();
+      try {
+        if (await locator.isVisible({ timeout: 1000 })) {
+          await locator.click({ timeout: 3000 });
+          await page.waitForTimeout(400);
+          return true;
+        }
+      } catch {
+        // naechster Selektor
       }
-    } catch {
-      // naechster Selektor
     }
   }
   return false;
@@ -341,4 +345,45 @@ export async function findLoginIframe(page: Page): Promise<string | null> {
     if (hasPassword) return frame.url();
   }
   return null;
+}
+
+/**
+ * Wartet darauf, dass eine Anmeldemaske sichtbar wird.
+ *
+ * Shops rendern ihre Formulare heute per JavaScript nach; direkt nach
+ * `domcontentloaded` ist die Seite oft noch leer. Fehlt danach immer noch
+ * ein Eingabefeld, wird ein sichtbarer Anmelden-Knopf angeklickt – manche
+ * Shops oeffnen die Maske erst als Overlay.
+ */
+export async function waitForLoginForm(page: Page, timeoutMs = 10_000): Promise<boolean> {
+  const anyField = 'input[type="password"], input[type="email"], input[type="text"], input[type="tel"]';
+
+  const appeared = await page
+    .locator(anyField)
+    .first()
+    .waitFor({ state: 'visible', timeout: timeoutMs })
+    .then(() => true)
+    .catch(() => false);
+  if (appeared) return true;
+
+  // Zweiter Versuch: Maske per Knopfdruck oeffnen.
+  const triggers = [
+    'button:has-text("Anmelden")',
+    'a:has-text("Anmelden")',
+    'button:has-text("Einloggen")',
+    'a:has-text("Einloggen")',
+    'button:has-text("Login")',
+    '[data-testid*="login" i]',
+  ];
+  const trigger = await firstVisible(page, triggers, 2500);
+  if (!trigger) return false;
+
+  await page.locator(trigger).first().click({ timeout: 3000 }).catch(() => undefined);
+  await page.waitForTimeout(700);
+  return page
+    .locator(anyField)
+    .first()
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
 }

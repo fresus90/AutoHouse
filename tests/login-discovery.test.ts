@@ -115,7 +115,9 @@ test('unsichtbare Felder werden uebergangen', async (t) => {
 // Vollstaendiger Ablauf gegen einen lokalen Shop-Ersatz
 // ---------------------------------------------------------------------------
 
-function fakeShop(twoStep: boolean): http.Server {
+type Variante = 'einstufig' | 'zweistufig' | 'nachgeladen' | 'overlay' | 'gesperrt';
+
+function fakeShop(variante: Variante): http.Server {
   return http.createServer((req, res) => {
     const url = req.url ?? '/';
     const angemeldet = (req.headers.cookie ?? '').includes('sess=1');
@@ -140,30 +142,49 @@ function fakeShop(twoStep: boolean): http.Server {
     }
     if (url.startsWith('/login')) {
       res.setHeader('content-type', 'text/html');
-      res.end(
-        twoStep
-          ? `<html><body><form action="/schritt2">
-               <input type="email" name="mail" class="zufall3">
-               <button type="submit">Weiter</button></form></body></html>`
-          : `<html><body><form action="/fertig">
-               <input type="email" name="mail" class="zufall3">
-               <input type="password" name="pw" class="zufall7">
-               <button type="submit">Anmelden</button></form></body></html>`,
-      );
+      const formular = `<form action="/fertig">
+          <input type="email" name="mail" class="zufall3">
+          <input type="password" name="pw" class="zufall7">
+          <button type="submit">Anmelden</button></form>`;
+
+      if (variante === 'zweistufig') {
+        res.end(`<html><body><form action="/schritt2">
+          <input type="email" name="mail" class="zufall3">
+          <button type="submit">Weiter</button></form></body></html>`);
+      } else if (variante === 'nachgeladen') {
+        // Wie eine Single-Page-App: Das Formular entsteht erst per JavaScript.
+        res.end(`<html><body><div id="app"></div><script>
+          setTimeout(function () {
+            document.getElementById('app').innerHTML = ${JSON.stringify(formular)};
+          }, 1200);
+        </script></body></html>`);
+      } else if (variante === 'overlay') {
+        // Die Maske oeffnet sich erst auf Knopfdruck.
+        res.end(`<html><body><button id="oeffnen">Anmelden</button>
+          <div id="app"></div><script>
+          document.getElementById('oeffnen').addEventListener('click', function () {
+            document.getElementById('app').innerHTML = ${JSON.stringify(formular)};
+          });
+        </script></body></html>`);
+      } else if (variante === 'gesperrt') {
+        res.end('<html><head><title>Access Denied</title></head><body><p>Zugriff verweigert</p></body></html>');
+      } else {
+        res.end(`<html><body>${formular}</body></html>`);
+      }
       return;
     }
     res.end('<html><body>Startseite</body></html>');
   });
 }
 
-async function runLogin(twoStep: boolean): Promise<{ ok: boolean; message?: string }> {
-  const server = fakeShop(twoStep);
+async function runLogin(variante: Variante): Promise<{ ok: boolean; message?: string }> {
+  const server = fakeShop(variante);
   server.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   db();
-  const user = createUser(`login-${twoStep}-${Date.now()}@example.invalid`, 'ein-langes-passwort');
+  const user = createUser(`login-${variante}-${Date.now()}@example.invalid`, 'ein-langes-passwort');
   const shop = createShop(user.id, { provider: 'rewe', name: 'Testshop' });
 
   try {
@@ -193,12 +214,32 @@ async function runLogin(twoStep: boolean): Promise<{ ok: boolean; message?: stri
 
 test('einstufige Anmeldung laeuft komplett durch', async (t) => {
   if (!chromium) return t.skip('Chromium fehlt.');
-  const result = await runLogin(false);
+  const result = await runLogin('einstufig');
   assert.equal(result.ok, true, result.message ?? '');
 });
 
 test('zweistufige Anmeldung laeuft komplett durch', async (t) => {
   if (!chromium) return t.skip('Chromium fehlt.');
-  const result = await runLogin(true);
+  const result = await runLogin('zweistufig');
   assert.equal(result.ok, true, result.message ?? '');
+});
+
+test('per JavaScript nachgeladenes Formular wird abgewartet', async (t) => {
+  if (!chromium) return t.skip('Chromium fehlt.');
+  const result = await runLogin('nachgeladen');
+  assert.equal(result.ok, true, result.message ?? '');
+});
+
+test('Maske, die sich erst auf Knopfdruck oeffnet, wird geoeffnet', async (t) => {
+  if (!chromium) return t.skip('Chromium fehlt.');
+  const result = await runLogin('overlay');
+  assert.equal(result.ok, true, result.message ?? '');
+});
+
+test('Sperrseite meldet Adresse und Titel zurueck', async (t) => {
+  if (!chromium) return t.skip('Chromium fehlt.');
+  const result = await runLogin('gesperrt');
+  assert.equal(result.ok, false);
+  assert.match(result.message ?? '', /Access Denied/, 'der Seitentitel steht in der Meldung');
+  assert.match(result.message ?? '', /127\.0\.0\.1/, 'die tatsaechliche Adresse steht in der Meldung');
 });

@@ -95,7 +95,10 @@ async function main(): Promise<void> {
     if (await dismissConsentBanner(page, entry.consent)) {
       console.log('Cookie-Banner bestaetigt.\n');
     }
-    await page.waitForTimeout(1500);
+    // Auf nachgeladene Inhalte warten – Shops rendern heute fast alles per
+    // JavaScript.
+    await page.waitForLoadState('networkidle').catch(() => undefined);
+    await page.waitForTimeout(1200);
 
     const report = await describePage(page, 30);
     console.log(`Titel:    ${report.title}`);
@@ -105,6 +108,21 @@ async function main(): Promise<void> {
     table(report.inputs);
     console.log('\nSchaltflaechen und Links:');
     table(report.buttons);
+
+    // Eingebettete Rahmen nennen – Anmeldedienste und Consent-Werkzeuge
+    // stecken oft darin, und dann ist die Hauptseite erwartungsgemaess leer.
+    const frames = page.frames().filter((frame) => frame !== page.mainFrame());
+    if (frames.length > 0) {
+      console.log('\nEingebettete Rahmen:');
+      for (const frame of frames) {
+        const hasPassword = await frame
+          .locator('input[type="password"]')
+          .first()
+          .isVisible({ timeout: 400 })
+          .catch(() => false);
+        console.log(`   ${frame.url()}${hasPassword ? '   <- enthaelt ein Passwortfeld!' : ''}`);
+      }
+    }
 
     const folder = path.join(config.artifactDir, 'diagnose');
     const artifacts = await captureArtifacts(page, 'diagnose', `inspect-${shop.provider}`);

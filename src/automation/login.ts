@@ -7,6 +7,7 @@ import {
   findLoginIframe,
   firstVisible,
   typeLikeHuman,
+  waitForLoginForm,
 } from './util.js';
 
 /**
@@ -46,8 +47,14 @@ export async function performLogin(
       };
     }
 
+    // Auf das per JavaScript nachgeladene Formular warten.
+    await waitForLoginForm(page);
+
     let fields = await findLoginFields(page);
-    if (!fields.user) continue;
+    if (!fields.user) {
+      ctx.log.debug(`Keine Anmeldemaske auf ${page.url()}.`);
+      continue;
+    }
 
     ctx.log.debug(
       `Anmeldemaske auf ${page.url()} gefunden ` +
@@ -115,11 +122,16 @@ export async function performLogin(
   const report = await describePage(page).catch(() => null);
   if (report) {
     ctx.log.warn(`Seite "${report.title}" (${report.url}) – gefundene Eingabefelder:`, report.inputs);
+    ctx.log.warn('Schaltflaechen auf der Seite:', report.buttons);
   }
+  // Die tatsaechliche Adresse und der Titel gehoeren in die Meldung: Daran
+  // erkennt man sofort eine Umleitung auf einen Anmeldedienst oder eine
+  // Sperrseite der Bot-Erkennung.
+  const where = report ? ` Gelandet auf ${report.url} (Titel: "${report.title}").` : '';
   return {
     ok: false,
     message:
-      'Anmeldemaske nicht gefunden. Mit "npm run shop:inspect --url <login-pfad>" ' +
-      'nachsehen, wie die Seite heute aufgebaut ist (siehe docs/shops.md).',
+      `Anmeldemaske nicht gefunden.${where} Seitenaufbau mit ` +
+      '"shop:inspect --shop <id> --url <login-pfad>" pruefen (siehe docs/shops.md).',
   };
 }
