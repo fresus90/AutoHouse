@@ -16,6 +16,7 @@ import {
   firstVisible,
   parsePriceToCents,
   typeLikeHuman,
+  waitOutBotChallenge,
 } from '../util.js';
 import { performLogin } from '../login.js';
 
@@ -101,6 +102,17 @@ export class ReweDriver implements ShopDriver {
   async prepare(ctx: DriverContext): Promise<void> {
     const { page } = requireBrowser(ctx);
     await page.goto(url(REWE.paths.home), { waitUntil: 'domcontentloaded' });
+
+    const challenge = await waitOutBotChallenge(page);
+    if (!challenge.passed) {
+      ctx.log.error(
+        `REWE zeigt eine Pruefseite der Bot-Erkennung ("${challenge.label}"). ` +
+          'Siehe docs/shops.md, Abschnitt "Bot-Erkennung".',
+      );
+      await ctx.capture('bot-pruefung-startseite');
+      return;
+    }
+
     if (await dismissConsentBanner(page, [...REWE.selectors.consent])) {
       ctx.log.debug('Consent-Banner bestaetigt.');
     }

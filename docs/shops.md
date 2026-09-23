@@ -158,6 +158,33 @@ Was bewusst **nicht** getan wird: Captchas umgehen, IP-Adressen rotieren,
 Fingerabdrücke fälschen. Erkennt ein Shop die Automatisierung, endet der Lauf
 mit *Aktion nötig* und einem Screenshot – und ein Mensch entscheidet.
 
+### Vorgeschaltete Prüfseiten
+
+Statt der erwarteten Seite kommt manchmal eine Zwischenseite mit einem Titel
+wie **„Nur einen Moment…"**, *„Checking your browser"* oder *„Access Denied"*.
+AutoHouse erkennt diese Beschriftungen (`detectBotChallenge`) und wartet bis zu
+30 Sekunden, ob sie sich von selbst auflöst – viele Prüfungen tun das, sobald
+ihr JavaScript durchgelaufen ist. Erst wenn sie stehen bleibt, meldet der Lauf
+*Aktion nötig* und nennt Beschriftung und Adresse.
+
+Bleibt sie stehen, liegt es fast immer an der **Herkunft der Anfrage**:
+Adressen aus Rechenzentren (Hetzner, Netcup, AWS …) werden deutlich strenger
+behandelt als private Anschlüsse. Zwei Wege, die tatsächlich helfen:
+
+1. **Session von einem privaten Anschluss übertragen.** Einmal zuhause über
+   den Login-Assistenten anmelden, die Session exportieren und auf dem Server
+   importieren – siehe
+   [docs/hosting.md, Abschnitt 8](hosting.md#8-shops-verbinden--auch-ohne-bildschirm).
+   Die Prüfung legt ihre Freigabe in Cookies ab, die mitwandern. Ob das hält,
+   hängt davon ab, wie streng der Shop die Freigabe an die IP-Adresse bindet.
+2. **AutoHouse zuhause betreiben** statt im Rechenzentrum: Raspberry Pi,
+   Mini-PC oder NAS. Dann kommen die Anfragen von einem gewöhnlichen
+   Privatanschluss. Der Cloudflare-Tunnel funktioniert unverändert, die
+   Anleitung bleibt dieselbe – und der Server kostet nichts mehr.
+
+Beides sind keine Umgehungen der Prüfung, sondern schlicht die Entscheidung,
+von wo aus bestellt wird.
+
 ---
 
 ## 6. Einen neuen Shop ergänzen

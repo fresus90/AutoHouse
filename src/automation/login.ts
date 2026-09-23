@@ -8,6 +8,7 @@ import {
   firstVisible,
   typeLikeHuman,
   waitForLoginForm,
+  waitOutBotChallenge,
 } from './util.js';
 
 /**
@@ -45,6 +46,27 @@ export async function performLogin(
           `${options.shopLabel} zeigt ein Captcha. Bitte einmalig ueber ` +
           '"npm run shop:login" im sichtbaren Browser anmelden.',
       };
+    }
+
+    // Pruefseiten der Bot-Erkennung loesen sich oft nach wenigen Sekunden
+    // von selbst auf. Erst danach hat das Suchen nach Feldern einen Sinn.
+    const challenge = await waitOutBotChallenge(page);
+    if (!challenge.passed) {
+      await ctx.capture('bot-pruefung');
+      return {
+        ok: false,
+        needsManualAction: true,
+        message:
+          `${options.shopLabel} hat eine Bot-Pruefung vorgeschaltet ("${challenge.label}", ` +
+          `${page.url()}) und liefert die Anmeldeseite nicht aus. ` +
+          'Das ist keine Frage der Selektoren: ' +
+          'Serveradressen aus Rechenzentren werden dabei haeufig abgewiesen. ' +
+          'Abhilfe: einmal von einem privaten Anschluss anmelden und die Session ' +
+          'uebertragen (siehe docs/hosting.md, Abschnitt 8) oder AutoHouse zuhause betreiben.',
+      };
+    }
+    if (challenge.label) {
+      ctx.log.info(`Pruefseite "${challenge.label}" wurde selbsttaetig weitergeleitet.`);
     }
 
     // Auf das per JavaScript nachgeladene Formular warten.

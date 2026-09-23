@@ -115,7 +115,14 @@ test('unsichtbare Felder werden uebergangen', async (t) => {
 // Vollstaendiger Ablauf gegen einen lokalen Shop-Ersatz
 // ---------------------------------------------------------------------------
 
-type Variante = 'einstufig' | 'zweistufig' | 'nachgeladen' | 'overlay' | 'gesperrt';
+type Variante =
+  | 'einstufig'
+  | 'zweistufig'
+  | 'nachgeladen'
+  | 'overlay'
+  | 'gesperrt'
+  | 'pruefseite-loest-sich'
+  | 'pruefseite-bleibt';
 
 function fakeShop(variante: Variante): http.Server {
   return http.createServer((req, res) => {
@@ -166,6 +173,18 @@ function fakeShop(variante: Variante): http.Server {
             document.getElementById('app').innerHTML = ${JSON.stringify(formular)};
           });
         </script></body></html>`);
+      } else if (variante === 'pruefseite-loest-sich') {
+        // Zwischenseite, die sich nach zwei Sekunden selbst weiterleitet.
+        res.end(`<html><head><title>Nur einen Moment...</title></head><body>
+          <div id="app"><p>Wir pruefen Ihre Verbindung</p></div><script>
+          setTimeout(function () {
+            document.title = 'Anmeldung';
+            document.getElementById('app').innerHTML = ${JSON.stringify(formular)};
+          }, 2000);
+        </script></body></html>`);
+      } else if (variante === 'pruefseite-bleibt') {
+        res.end(`<html><head><title>Nur einen Moment...</title></head>
+          <body><p>Wir pruefen Ihre Verbindung</p></body></html>`);
       } else if (variante === 'gesperrt') {
         res.end('<html><head><title>Access Denied</title></head><body><p>Zugriff verweigert</p></body></html>');
       } else {
@@ -236,10 +255,27 @@ test('Maske, die sich erst auf Knopfdruck oeffnet, wird geoeffnet', async (t) =>
   assert.equal(result.ok, true, result.message ?? '');
 });
 
-test('Sperrseite meldet Adresse und Titel zurueck', async (t) => {
+test('Pruefseite, die sich selbst aufloest, wird abgewartet', async (t) => {
+  if (!chromium) return t.skip('Chromium fehlt.');
+  const result = await runLogin('pruefseite-loest-sich');
+  assert.equal(result.ok, true, result.message ?? '');
+});
+
+test('bleibende Pruefseite wird als Bot-Pruefung gemeldet', async (t) => {
+  if (!chromium) return t.skip('Chromium fehlt.');
+  const result = await runLogin('pruefseite-bleibt');
+  assert.equal(result.ok, false);
+  assert.match(result.message ?? '', /Bot-Pruefung/, 'als Bot-Pruefung benannt');
+  assert.match(result.message ?? '', /Nur einen Moment/, 'die Beschriftung steht in der Meldung');
+  assert.match(result.message ?? '', /127\.0\.0\.1/, 'die Adresse steht in der Meldung');
+  assert.match(result.message ?? '', /Session/, 'nennt den Ausweg ueber die uebertragene Session');
+});
+
+test('Sperrseite wird als Bot-Pruefung erkannt und nennt Titel und Adresse', async (t) => {
   if (!chromium) return t.skip('Chromium fehlt.');
   const result = await runLogin('gesperrt');
   assert.equal(result.ok, false);
+  assert.match(result.message ?? '', /Bot-Pruefung/);
   assert.match(result.message ?? '', /Access Denied/, 'der Seitentitel steht in der Meldung');
   assert.match(result.message ?? '', /127\.0\.0\.1/, 'die tatsaechliche Adresse steht in der Meldung');
 });

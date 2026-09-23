@@ -387,3 +387,55 @@ export async function waitForLoginForm(page: Page, timeoutMs = 10_000): Promise<
     .then(() => true)
     .catch(() => false);
 }
+
+/**
+ * Erkennt eine vorgeschaltete Pruefseite der Bot-Erkennung.
+ *
+ * Solche Zwischenseiten ("Nur einen Moment…", "Checking your browser") tragen
+ * kaum Inhalt und leiten nach einer JavaScript-Pruefung weiter – oder eben
+ * nicht, etwa bei Adressen aus Rechenzentren. Gibt die erkannte Beschriftung
+ * zurueck, sonst null.
+ */
+export async function detectBotChallenge(page: Page): Promise<string | null> {
+  const marker =
+    /(nur einen moment|einen augenblick|just a moment|checking your browser|attention required|access denied|zugriff verweigert|bitte best[äa]tigen sie|verify you are human|sind sie ein mensch)/i;
+
+  const found = await page
+    .evaluate(() => ({
+      title: document.title ?? '',
+      text: (document.body?.innerText ?? '').slice(0, 400),
+    }))
+    .catch(() => null);
+  if (!found) return null;
+
+  if (marker.test(found.title)) return found.title.trim();
+  if (marker.test(found.text)) return found.title.trim() || found.text.split('\n')[0]!.trim();
+
+  // Bewusst keine Faustregel ueber "die Seite wirkt leer": Eine Maske, die
+  // sich erst auf Knopfdruck oeffnet, sieht genauso aus.
+  return null;
+}
+
+/**
+ * Wartet darauf, dass eine Pruefseite von selbst weiterleitet.
+ *
+ * Viele Pruefungen loesen sich nach ein paar Sekunden auf, sobald das
+ * JavaScript durchgelaufen ist – dann geht es normal weiter. Bleibt die Seite
+ * stehen, kommt die erkannte Beschriftung zurueck, damit der Aufrufer
+ * verstaendlich melden kann, woran es liegt.
+ */
+export async function waitOutBotChallenge(
+  page: Page,
+  timeoutMs = 30_000,
+): Promise<{ passed: boolean; label: string | null }> {
+  const label = await detectBotChallenge(page);
+  if (!label) return { passed: true, label: null };
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(1500);
+    const still = await detectBotChallenge(page);
+    if (!still) return { passed: true, label };
+  }
+  return { passed: false, label };
+}
