@@ -1,5 +1,6 @@
 import type { ProviderSlug } from '../core/types.js';
 import { DemoDriver } from './drivers/demo.driver.js';
+import { KnusprDriver } from './drivers/knuspr.driver.js';
 import { DmDriver } from './drivers/dm.driver.js';
 import { ReweDriver } from './drivers/rewe.driver.js';
 import type { ShopDriver } from './types.js';
@@ -7,6 +8,7 @@ import type { ShopDriver } from './types.js';
 const drivers: Record<ProviderSlug, ShopDriver> = {
   rewe: new ReweDriver(),
   dm: new DmDriver(),
+  knuspr: new KnusprDriver(),
   demo: new DemoDriver(),
 };
 

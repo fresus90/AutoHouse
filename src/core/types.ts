@@ -1,4 +1,4 @@
-export type ProviderSlug = 'dm' | 'rewe' | 'demo';
+export type ProviderSlug = 'dm' | 'rewe' | 'knuspr' | 'demo';
 
 export interface User {
   id: string;

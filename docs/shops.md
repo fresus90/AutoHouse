@@ -134,13 +134,31 @@ npm run shop:inspect -- --url "https://www.knuspr.de/suche?q=Vollmilch" \
 Ausgegeben wird je Anfrage Methode, Status, Adresse, der gesendete Rumpf und
 die obersten Schlüssel der Antwort – genug, um den Treiber darauf zu setzen.
 
-### Was über Knuspr bereits bekannt ist
+### Knuspr: Stand des Treibers
 
-| Schritt | Befund |
-| --- | --- |
-| Anmeldung | Maske liegt hinter `<div aria-label="Konto">`, danach `input#email` und `input#password` |
-| Liefergebiet | `<button>Adresse ändern</button>` öffnet `input#fullAddress`, bestätigt mit `Speichern`. **Wichtig:** Ohne Adresse rät Knuspr aus der Server-IP – ein Server in Nürnberg bekommt das Sortiment für Berlin |
-| Suche | `/suche?q=…` liefert nur die Seitenhülle; die Treffer kommen per JSON nach (mit `--network` sichtbar machen) |
+`src/automation/drivers/knuspr.driver.ts` deckt ab: Anmeldung, Lieferadresse,
+Suche, Warenkorb. **Nicht umgesetzt ist der Bestellabschluss** – der Lauf
+endet dort mit einer klaren Meldung, Testläufe funktionieren vollständig.
+
+| Schritt | Befund | geprüft |
+| --- | --- | --- |
+| Anmeldung | Maske hinter `<div aria-label="Konto">`, darin `input#email` und `input#password` | ja, Seitenbericht |
+| Liefergebiet | `Adresse ändern` öffnet `input#fullAddress`, bestätigt mit `Speichern`. Die Adresse wird im Feld **Markt-ID** des Shops hinterlegt | ja, Seitenbericht |
+| Warenkorb-Antwort | `{ status, messages, data }` mit `data.items` als **Objekt**, Schlüssel = Produktnummer | ja, gegen eine echte Antwort (`tests/knuspr.test.ts`) |
+| Suche | `/suche?q=…` liefert nur die Seitenhülle, Treffer kommen per JSON nach | teilweise |
+| Endpunkt-Adressen | Vermutungen, mit `--network` zu bestätigen | **nein** |
+| Kasse | nicht umgesetzt | – |
+
+> **Preise sind Euro-Beträge.** Ganze Beträge kommen im JSON ohne
+> Nachkommastellen an: `minimalOrderPrice: 39` meint 39 Euro. Deshalb wird bei
+> Knuspr überall `parsePriceToCents(wert, 'euros')` benutzt – sonst würde aus
+> dem Mindestbestellwert von 39 Euro einer von 39 Cent, und die Prüfung liefe
+> immer durch.
+
+> **Ohne Adresse rät Knuspr das Liefergebiet aus der IP.** Ein Server in
+> Nürnberg bekommt das Berliner Sortiment, mit falschen Preisen und
+> Lieferzeiten. Beim Anlegen des Shops die Lieferadresse in „Markt-ID"
+> eintragen, z. B. `Musterstraße 1, München`.
 
 Für Endpunkte, die sich so nicht zeigen, weiterhin von Hand:
 

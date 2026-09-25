@@ -42,6 +42,7 @@ import type { ProviderSlug, Shop } from '../core/types.js';
 const BASE: Record<ProviderSlug, string> = {
   rewe: 'https://shop.rewe.de',
   dm: 'https://www.dm.de',
+  knuspr: 'https://www.knuspr.de',
   demo: 'https://example.invalid',
 };
 

@@ -8,7 +8,7 @@ const dateOnly = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Erwartet wird ein Datum im Format JJJJ-MM-TT.');
 
-export const providerSchema = z.enum(['dm', 'rewe', 'demo']);
+export const providerSchema = z.enum(['dm', 'rewe', 'knuspr', 'demo']);
 
 export const loginSchema = z.object({
   email: z.string().email('Bitte eine gueltige E-Mail-Adresse angeben.'),
