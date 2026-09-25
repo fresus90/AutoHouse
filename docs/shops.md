@@ -117,7 +117,32 @@ Blöcke"** im Bericht: Er gruppiert gleich aufgebaute Elemente und zeigt
 Anzahl und Beispieltext. Acht gleiche Blöcke auf einer Suchseite sind so gut
 wie immer die Produktkacheln.
 
-Für Endpunkte (die im Bericht nicht auftauchen) weiterhin von Hand:
+**Endpunkte mitschneiden.** Statt im Netzwerk-Reiter der Entwicklerwerkzeuge
+zu suchen, zeichnet das Werkzeug die JSON-Anfragen selbst auf – samt
+gesendeten Daten und Form der Antwort:
+
+```bash
+# Welchen Endpunkt spricht die Suche an?
+npm run shop:inspect -- --url "https://www.knuspr.de/suche?q=Vollmilch" \
+  --network --wait 6000
+
+# Was geht beim Hinzufuegen zum Warenkorb raus?
+npm run shop:inspect -- --url "https://www.knuspr.de/suche?q=Vollmilch" \
+  --network --click "In den Warenkorb"
+```
+
+Ausgegeben wird je Anfrage Methode, Status, Adresse, der gesendete Rumpf und
+die obersten Schlüssel der Antwort – genug, um den Treiber darauf zu setzen.
+
+### Was über Knuspr bereits bekannt ist
+
+| Schritt | Befund |
+| --- | --- |
+| Anmeldung | Maske liegt hinter `<div aria-label="Konto">`, danach `input#email` und `input#password` |
+| Liefergebiet | `<button>Adresse ändern</button>` öffnet `input#fullAddress`, bestätigt mit `Speichern`. **Wichtig:** Ohne Adresse rät Knuspr aus der Server-IP – ein Server in Nürnberg bekommt das Sortiment für Berlin |
+| Suche | `/suche?q=…` liefert nur die Seitenhülle; die Treffer kommen per JSON nach (mit `--network` sichtbar machen) |
+
+Für Endpunkte, die sich so nicht zeigen, weiterhin von Hand:
 
 1. Shop im normalen Browser öffnen, Entwicklerwerkzeuge → **Netzwerk**, Filter
    auf `Fetch/XHR`.

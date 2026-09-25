@@ -91,6 +91,61 @@ interface ReportOptions {
   click?: string | undefined;
   /** Statt des Ueberblicks gezielt diese Elemente auflisten. */
   selector?: string | undefined;
+  /** JSON-Anfragen der Seite mitschneiden. */
+  network?: boolean;
+  /** Zusaetzliche Wartezeit fuer nachgeladene Inhalte. */
+  waitMs?: number;
+}
+
+/** Ein mitgeschnittener Datenaustausch mit dem Shop. */
+interface Exchange {
+  method: string;
+  url: string;
+  status: number;
+  type: string;
+  postData: string | null;
+  preview: string | null;
+}
+
+/**
+ * Schneidet die JSON-Anfragen der Seite mit.
+ *
+ * Genau das, was man sonst im Netzwerk-Reiter der Entwicklerwerkzeuge sucht:
+ * welchen Endpunkt die Suche anspricht, was beim Hinzufuegen zum Warenkorb
+ * geschickt wird, wie die Antwort aufgebaut ist.
+ */
+function recordNetwork(page: Page): Exchange[] {
+  const exchanges: Exchange[] = [];
+  page.on('response', (response) => {
+    const request = response.request();
+    if (!['xhr', 'fetch'].includes(request.resourceType())) return;
+    const type = response.headers()['content-type'] ?? '';
+
+    const entry: Exchange = {
+      method: request.method(),
+      url: response.url(),
+      status: response.status(),
+      type: type.split(';')[0] ?? '',
+      postData: (request.postData() ?? null)?.slice(0, 300) ?? null,
+      preview: null,
+    };
+    exchanges.push(entry);
+
+    if (!type.includes('json')) return;
+    void response
+      .json()
+      .then((body: unknown) => {
+        // Nur die Form zeigen, nicht die ganze Antwort.
+        if (Array.isArray(body)) {
+          entry.preview = `Array mit ${body.length} Eintraegen; erster Eintrag: ${JSON.stringify(body[0]).slice(0, 200)}`;
+        } else if (body && typeof body === 'object') {
+          const keys = Object.keys(body as Record<string, unknown>);
+          entry.preview = `Objekt mit ${keys.join(', ')}`.slice(0, 240);
+        }
+      })
+      .catch(() => undefined);
+  });
+  return exchanges;
 }
 
 /** Der eigentliche Bericht – unabhaengig davon, woher die Seite kommt. */
@@ -100,6 +155,7 @@ async function report(
   slug: string,
   options: ReportOptions = {},
 ): Promise<void> {
+  const exchanges = options.network ? recordNetwork(page) : [];
   await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
   const challenge = await waitOutBotChallenge(page, 20_000);
@@ -112,7 +168,7 @@ async function report(
     console.log('Cookie-Banner bestaetigt.\n');
   }
   await page.waitForLoadState('networkidle').catch(() => undefined);
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(options.waitMs ?? 1200);
 
   // Manche Masken oeffnen sich erst auf Klick – etwa ein Konto-Symbol im Kopf.
   if (options.click) {
@@ -195,6 +251,20 @@ async function report(
     }
   }
 
+  if (options.network) {
+    // Kurz nachwarten: Ein Klick loest die interessante Anfrage oft erst aus.
+    await page.waitForTimeout(1500);
+    console.log(`\nJSON-Anfragen der Seite (${exchanges.length}):`);
+    if (exchanges.length === 0) {
+      console.log('   (keine – die Seite holt ihre Daten nicht per JSON nach)');
+    }
+    for (const exchange of exchanges) {
+      console.log(`   ${exchange.method} ${exchange.status}  ${exchange.url.slice(0, 150)}`);
+      if (exchange.postData) console.log(`      gesendet:  ${exchange.postData}`);
+      if (exchange.preview) console.log(`      Antwort:   ${exchange.preview}`);
+    }
+  }
+
   const folder = path.join(config.artifactDir, 'diagnose');
   mkdirSync(folder, { recursive: true });
   const artifacts = await captureArtifacts(page, 'diagnose', `inspect-${slug}`);
@@ -212,7 +282,9 @@ function usage(): void {
       'oeffentliche Seiten wie Anmeldemasken und Produktsuchen.\n\n' +
       'Zusaetzlich:\n' +
       '  --click "Anmelden"      oeffnet eine Maske, die erst auf Klick erscheint\n' +
-      '  --selector "<css>"      listet gezielt diese Elemente samt HTML auf',
+      '  --selector "<css>"      listet gezielt diese Elemente samt HTML auf\n' +
+      '  --network               schneidet die JSON-Anfragen der Seite mit\n' +
+      '  --wait 6000             laenger auf nachgeladene Inhalte warten',
   );
 }
 
@@ -246,6 +318,8 @@ async function main(): Promise<void> {
       await report(session.page, raw, slug, {
         click: args.get('click'),
         selector: args.get('selector'),
+        network: args.flag('network'),
+        waitMs: Number(args.get('wait') ?? 0) || undefined,
       });
     } catch (error) {
       console.error(`Fehler: ${errorMessage(error)}`);
@@ -275,6 +349,8 @@ async function main(): Promise<void> {
     await report(page, target, shop.provider, {
       click: args.get('click'),
       selector: args.get('selector'),
+      network: args.flag('network'),
+      waitMs: Number(args.get('wait') ?? 0) || undefined,
     });
   }).catch((error: unknown) => {
     console.error(`Fehler: ${errorMessage(error)}`);
