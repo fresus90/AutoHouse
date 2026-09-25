@@ -145,9 +145,31 @@ endet dort mit einer klaren Meldung, Testläufe funktionieren vollständig.
 | Anmeldung | Maske hinter `<div aria-label="Konto">`, darin `input#email` und `input#password` | ja, Seitenbericht |
 | Liefergebiet | `Adresse ändern` öffnet `input#fullAddress`, bestätigt mit `Speichern`. Die Adresse wird im Feld **Markt-ID** des Shops hinterlegt | ja, Seitenbericht |
 | Warenkorb-Antwort | `{ status, messages, data }` mit `data.items` als **Objekt**, Schlüssel = Produktnummer | ja, gegen eine echte Antwort (`tests/knuspr.test.ts`) |
-| Suche | `/suche?q=…` liefert nur die Seitenhülle, Treffer kommen per JSON nach | teilweise |
-| Endpunkt-Adressen | Vermutungen, mit `--network` zu bestätigen | **nein** |
+| Suche | zweistufig, Endpunkte aus einer Aufzeichnung abgelesen | ja |
+| Warenkorb-Adressen | noch Vermutung | **nein** |
+| Lieferzeitfenster | Endpunkt bekannt, Antwortform nicht ausgewertet | – |
 | Kasse | nicht umgesetzt | – |
+
+**Die Suche läuft zweistufig** – das ist der Grund, warum sie schnell ist:
+
+| Schritt | Aufruf | liefert |
+| --- | --- | --- |
+| 1 | `/services/frontend-service/autocomplete-suggestion?search=…` | `productIds` |
+| 2 | `/api/v1/products?products=A&products=B&…` | Name, Slug, Einheit, Menge |
+| 3 | `/api/v1/products/prices?products=…` | `price.amount` in Euro, dazu `sales` |
+| 4 | `/api/v1/products/stock?products=…` | `maxBasketAmountReason`, `unavailabilityReason` |
+
+Die Schritte 2 bis 4 holen **alle Treffer auf einmal**: vier Aufrufe für eine
+ganze Trefferliste statt einem pro Artikel.
+
+> **`sales` enthält Mitglieder- und Aktionspreise.** Gerechnet wird mit
+> `price.amount`, dem regulären Preis. Ein Budget darf sich nicht auf einen
+> Xtra-Mitgliedsrabatt verlassen – sonst wird der Warenkorb an der Kasse
+> teurer als geplant.
+
+> **Ohne Bestandsangabe gilt ein Artikel als nicht lieferbar.** Lieber eine
+> Position weglassen als sie in einen Warenkorb legen, der an der Kasse
+> scheitert.
 
 > **Preise sind Euro-Beträge.** Ganze Beträge kommen im JSON ohne
 > Nachkommastellen an: `minimalOrderPrice: 39` meint 39 Euro. Deshalb wird bei

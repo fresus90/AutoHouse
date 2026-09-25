@@ -42,11 +42,26 @@ export const KNUSPR = {
     home: '/',
     search: '/suche',
   },
+  /**
+   * Die Suche laeuft bei Knuspr zweistufig: Ein Aufruf liefert nur die
+   * Produktnummern, Namen, Preise und Verfuegbarkeit kommen danach gebuendelt
+   * fuer alle Treffer auf einmal. Das ist schnell – vier Aufrufe fuer eine
+   * ganze Trefferliste statt einer pro Artikel.
+   *
+   * Abgelesen aus einer Aufzeichnung der Seite (shop:inspect --network).
+   * Nicht bestaetigt sind die Warenkorb-Adressen; deren Antwortform ist
+   * dagegen gegen eine echte Antwort geprueft.
+   */
   api: {
-    // TODO gegen die Live-Seite pruefen (--network), siehe docs/shops.md
+    suggestion: '/services/frontend-service/autocomplete-suggestion',
+    products: '/api/v1/products',
+    prices: '/api/v1/products/prices',
+    stock: '/api/v1/products/stock',
+    // Lieferzeitfenster – Endpunkt bekannt, Antwortform noch nicht ausgewertet.
+    timeslots: '/services/frontend-service/v1/timeslot-reservation',
+    // TODO gegen die Live-Seite pruefen (--network --click "In den Warenkorb")
     cart: '/services/frontend-service/v2/cart',
     cartItem: '/services/frontend-service/v2/cart',
-    search: '/services/frontend-service/search-metadata',
   },
   selectors: {
     consent: [
@@ -167,28 +182,75 @@ export class KnusprDriver implements ShopDriver {
   }
 
   async searchProducts(ctx: DriverContext, query: string, limit = 20): Promise<ProductCandidate[]> {
-    const { api } = requireBrowser(ctx);
-    const params = new URLSearchParams({ search: query, limit: String(limit), companyId: '1' });
-    const response = await api
-      .get(`${url(KNUSPR.api.search)}?${params.toString()}`, {
-        headers: { accept: 'application/json' },
-        failOnStatusCode: false,
-      })
-      .catch(() => null);
+    const ids = await this.searchProductIds(ctx, query, limit);
+    if (ids.length === 0) {
+      ctx.log.warn(`Suche "${query}" lieferte keine Produktnummern, weiche auf die Seite aus.`);
+      return this.searchViaDom(ctx, query, limit);
+    }
 
-    if (response?.ok()) {
+    const products = await this.loadProductDetails(ctx, ids);
+    ctx.log.debug(`Suche "${query}": ${products.length} Treffer ueber die API.`);
+    return products;
+  }
+
+  /** Schritt 1: Suchbegriff zu Produktnummern. */
+  private async searchProductIds(
+    ctx: DriverContext,
+    query: string,
+    limit: number,
+  ): Promise<number[]> {
+    const { api } = requireBrowser(ctx);
+    // Der Name des Suchparameters ist nicht dokumentiert – die gaengigen
+    // Varianten der Reihe nach probieren.
+    for (const key of ['search', 'q', 'query']) {
+      const params = new URLSearchParams({ [key]: query, companyId: '1', limit: String(limit) });
+      const response = await api
+        .get(`${url(KNUSPR.api.suggestion)}?${params.toString()}`, {
+          headers: { accept: 'application/json' },
+          failOnStatusCode: false,
+        })
+        .catch(() => null);
+      if (!response?.ok()) continue;
+
       const payload = (await response.json().catch(() => null)) as unknown;
-      const products = extractKnusprProducts(payload).slice(0, limit);
-      if (products.length > 0) {
-        ctx.log.debug(`Suche "${query}": ${products.length} Treffer ueber die API.`);
-        return products;
+      const ids = extractKnusprProductIds(payload).slice(0, limit);
+      if (ids.length > 0) {
+        ctx.log.debug(`Suchparameter "${key}" liefert ${ids.length} Produktnummern.`);
+        return ids;
       }
     }
-    ctx.log.warn(
-      `Knuspr-Produktsuche ueber die API nicht moeglich (Status ${response?.status() ?? 'n/a'}), ` +
-        'weiche auf die Seite aus.',
-    );
-    return this.searchViaDom(ctx, query, limit);
+    return [];
+  }
+
+  /**
+   * Schritt 2: Stammdaten, Preise und Verfuegbarkeit fuer alle Treffer auf
+   * einmal holen und zusammenfuehren.
+   */
+  private async loadProductDetails(
+    ctx: DriverContext,
+    ids: number[],
+  ): Promise<ProductCandidate[]> {
+    const { api } = requireBrowser(ctx);
+    const params = ids.map((id) => `products=${id}`).join('&');
+
+    const fetchJson = async (path: string): Promise<unknown> => {
+      const response = await api
+        .get(`${url(path)}?${params}`, { headers: { accept: 'application/json' }, failOnStatusCode: false })
+        .catch(() => null);
+      if (!response?.ok()) {
+        ctx.log.warn(`Knuspr: ${path} antwortete mit ${response?.status() ?? 'n/a'}.`);
+        return null;
+      }
+      return response.json().catch(() => null);
+    };
+
+    const [products, prices, stock] = await Promise.all([
+      fetchJson(KNUSPR.api.products),
+      fetchJson(KNUSPR.api.prices),
+      fetchJson(KNUSPR.api.stock),
+    ]);
+
+    return mergeKnusprProducts(products, prices, stock);
   }
 
   private async searchViaDom(
@@ -401,6 +463,76 @@ export function extractKnusprProducts(payload: unknown): ProductCandidate[] {
         imageUrl: item['imgPath'] ? `https://cdn.knuspr.de${String(item['imgPath'])}` : null,
         productUrl: baseLink ? `${KNUSPR.baseUrl}/${baseLink}` : `${KNUSPR.baseUrl}/${externalId}`,
         available: item['maxBasketAmountReason'] !== 'NOT_ALLOWED',
+      };
+      return candidate;
+    })
+    .filter((product): product is ProductCandidate => product !== null);
+}
+
+/** Aus der Antwort der Suche die Produktnummern lesen. */
+export function extractKnusprProductIds(payload: unknown): number[] {
+  const data = unwrap(payload);
+  if (!data) return [];
+  const raw = data['productIds'];
+  if (!Array.isArray(raw)) return [];
+  return raw.map((entry) => Number(entry)).filter((id) => Number.isFinite(id));
+}
+
+/**
+ * Fuehrt die drei Sammelantworten zu Produkten zusammen.
+ *
+ * Preise kommen als { amount, currency } in Euro. `sales` enthaelt
+ * Mitglieder- und Aktionspreise; massgeblich ist der regulaere Preis, denn
+ * auf einen Mitgliedsrabatt darf sich ein Budget nicht verlassen.
+ */
+export function mergeKnusprProducts(
+  productsPayload: unknown,
+  pricesPayload: unknown,
+  stockPayload: unknown,
+): ProductCandidate[] {
+  const asList = (value: unknown): Record<string, unknown>[] =>
+    Array.isArray(value) ? value.map(asRecord).filter((e): e is Record<string, unknown> => e !== null) : [];
+
+  const priceById = new Map<string, Record<string, unknown>>();
+  for (const entry of asList(pricesPayload)) priceById.set(String(entry['productId']), entry);
+
+  const stockById = new Map<string, Record<string, unknown>>();
+  for (const entry of asList(stockPayload)) stockById.set(String(entry['productId']), entry);
+
+  const amountOf = (value: unknown): number | null =>
+    parsePriceToCents(asRecord(value)?.['amount'] as unknown, 'euros');
+
+  return asList(productsPayload)
+    .map((product) => {
+      const externalId = String(product['id'] ?? product['productId'] ?? '');
+      const name = String(product['name'] ?? '').trim();
+      if (!externalId || !name) return null;
+
+      const price = priceById.get(externalId);
+      const stock = stockById.get(externalId);
+      const slug = typeof product['slug'] === 'string' ? product['slug'] : null;
+
+      const perUnit = asRecord(price?.['pricePerUnit']);
+      const unit = String(product['unit'] ?? '');
+      const basePrice =
+        perUnit && unit
+          ? `${String(perUnit['amount'])} ${String(perUnit['currency'] ?? 'EUR')}/${unit}`
+          : null;
+
+      const candidate: ProductCandidate = {
+        externalId,
+        name,
+        brand: product['brand'] ? String(product['brand']) : null,
+        grammage: product['textualAmount'] ? String(product['textualAmount']) : null,
+        priceCents: amountOf(price?.['price']),
+        basePrice,
+        imageUrl: product['imgPath'] ? `https://cdn.knuspr.de${String(product['imgPath'])}` : null,
+        productUrl: `${KNUSPR.baseUrl}/${slug ?? externalId}`,
+        // Ohne Bestandsangabe wird nicht angenommen, der Artikel sei lieferbar.
+        available:
+          stock === undefined
+            ? false
+            : stock['maxBasketAmountReason'] === 'ALLOWED' && !stock['unavailabilityReason'],
       };
       return candidate;
     })
